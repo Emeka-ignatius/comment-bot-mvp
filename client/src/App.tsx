@@ -1,34 +1,47 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { useAuth } from "./_core/hooks/useAuth";
 import Home from "./pages/Home";
+import Dashboard from "./pages/Dashboard";
+import Accounts from "./pages/Accounts";
+import Videos from "./pages/Videos";
+import Comments from "./pages/Comments";
+import Jobs from "./pages/Jobs";
+import Logs from "./pages/Logs";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
+  const { user, loading } = useAuth();
+  const [location, setLocation] = useLocation();
+
+  // Redirect to dashboard if authenticated and on home page
+  if (!loading && user && location === "/") {
+    setLocation("/dashboard");
+  }
+
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/" component={Home} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/accounts" component={Accounts} />
+      <Route path="/videos" component={Videos} />
+      <Route path="/comments" component={Comments} />
+      <Route path="/jobs" component={Jobs} />
+      <Route path="/logs" component={Logs} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
-
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider
         defaultTheme="light"
-        // switchable
       >
         <TooltipProvider>
           <Toaster />

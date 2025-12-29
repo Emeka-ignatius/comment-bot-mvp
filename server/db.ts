@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, InsertAccount, accounts, InsertVideo, videos, InsertCommentTemplate, commentTemplates, InsertJob, jobs, InsertLog, logs } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,128 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+// Accounts queries
+export async function createAccount(data: InsertAccount) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(accounts).values(data);
+  return result;
+}
+
+export async function getAccountsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(accounts).where(eq(accounts.userId, userId));
+}
+
+export async function updateAccount(id: number, data: Partial<InsertAccount>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(accounts).set(data).where(eq(accounts.id, id));
+}
+
+export async function deleteAccount(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(accounts).where(eq(accounts.id, id));
+}
+
+// Videos queries
+export async function createVideo(data: InsertVideo) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(videos).values(data);
+}
+
+export async function getVideosByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(videos).where(eq(videos.userId, userId));
+}
+
+export async function updateVideo(id: number, data: Partial<InsertVideo>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(videos).set(data).where(eq(videos.id, id));
+}
+
+export async function deleteVideo(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(videos).where(eq(videos.id, id));
+}
+
+// Comment Templates queries
+export async function createCommentTemplate(data: InsertCommentTemplate) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(commentTemplates).values(data);
+}
+
+export async function getCommentTemplatesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(commentTemplates).where(eq(commentTemplates.userId, userId));
+}
+
+export async function updateCommentTemplate(id: number, data: Partial<InsertCommentTemplate>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(commentTemplates).set(data).where(eq(commentTemplates.id, id));
+}
+
+export async function deleteCommentTemplate(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(commentTemplates).where(eq(commentTemplates.id, id));
+}
+
+// Jobs queries
+export async function createJob(data: InsertJob) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(jobs).values(data);
+}
+
+export async function getJobsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(jobs).where(eq(jobs.userId, userId));
+}
+
+export async function getPendingJobs() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(jobs).where(eq(jobs.status, "pending")).limit(1);
+}
+
+export async function updateJob(id: number, data: Partial<InsertJob>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(jobs).set(data).where(eq(jobs.id, id));
+}
+
+export async function deleteJob(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(jobs).where(eq(jobs.id, id));
+}
+
+// Logs queries
+export async function createLog(data: InsertLog) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(logs).values(data);
+}
+
+export async function getLogsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(logs).where(eq(logs.userId, userId));
+}
+
+export async function getLogsByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.select().from(logs).where(eq(logs.jobId, jobId));
+}
