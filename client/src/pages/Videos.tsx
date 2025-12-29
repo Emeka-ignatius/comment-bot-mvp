@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { trpc } from '@/lib/trpc';
 import { useState } from 'react';
-import { Loader2, Trash2, Plus } from 'lucide-react';
+import { Loader2, Trash2, Plus, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Videos() {
@@ -19,26 +19,66 @@ export default function Videos() {
     title: '',
   });
 
+  const [urlError, setUrlError] = useState<string>('');
+
   const extractVideoId = (url: string) => {
     let videoId = '';
-    if (url.includes('youtube.com')) {
-      const match = url.match(/v=([^&]+)/);
-      videoId = match ? match[1] : '';
-    } else if (url.includes('rumble.com')) {
-      const match = url.match(/\/v\/([^/?]+)/);
-      videoId = match ? match[1] : '';
+    let platform = 'youtube' as 'youtube' | 'rumble';
+    let error = '';
+
+    if (!url.trim()) {
+      return { videoId: '', platform, error: '' };
     }
-    return videoId;
+
+    try {
+      // Validate URL format
+      new URL(url);
+
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        // YouTube: https://www.youtube.com/watch?v=dQw4w9WgXcQ or https://youtu.be/dQw4w9WgXcQ
+        let match = url.match(/v=([^&]+)/);
+        if (!match) {
+          match = url.match(/youtu\.be\/([^?&]+)/);
+        }
+        if (match) {
+          videoId = match[1];
+          platform = 'youtube';
+        } else {
+          error = 'Invalid YouTube URL. Please use format: https://www.youtube.com/watch?v=VIDEO_ID';
+        }
+      } else if (url.includes('rumble.com')) {
+        // Rumble: https://rumble.com/v73kr84-nitro-age-returns.html
+        const match = url.match(/\/v([0-9a-z]+)/i);
+        if (match) {
+          videoId = match[1];
+          platform = 'rumble';
+        } else {
+          error = 'Invalid Rumble URL. Please use format: https://rumble.com/v[VIDEO_ID]-[title].html';
+        }
+      } else {
+        error = 'Unsupported platform. Please use YouTube or Rumble URLs.';
+      }
+    } catch (e) {
+      error = 'Invalid URL format. Please enter a valid video URL.';
+    }
+
+    return { videoId, platform, error };
   };
 
   const handleUrlChange = (url: string) => {
-    const videoId = extractVideoId(url);
-    setFormData({ ...formData, videoUrl: url, videoId });
+    const { videoId, platform, error } = extractVideoId(url);
+    setUrlError(error);
+    setFormData({ ...formData, videoUrl: url, videoId, platform });
   };
 
   const handleCreate = async () => {
-    if (!formData.videoUrl || !formData.videoId) {
-      toast.error('Please provide a valid video URL');
+    if (!formData.videoUrl) {
+      toast.error('Please enter a video URL');
+      return;
+    }
+
+    if (!formData.videoId) {
+      toast.error(urlError || 'Please provide a valid video URL');
       return;
     }
 
@@ -46,6 +86,7 @@ export default function Videos() {
       await createMutation.mutateAsync(formData);
       toast.success('Video added successfully');
       setFormData({ platform: 'youtube', videoUrl: '', videoId: '', title: '' });
+      setUrlError('');
       refetch();
     } catch (error) {
       toast.error('Failed to add video');
@@ -99,12 +140,22 @@ export default function Videos() {
               <label className="block text-sm font-medium text-foreground mb-2">Video URL</label>
               <Input
                 type="text"
-                placeholder="https://www.youtube.com/watch?v=..."
+                placeholder={formData.platform === 'youtube' ? 'https://www.youtube.com/watch?v=...' : 'https://rumble.com/v...'}
                 value={formData.videoUrl}
                 onChange={(e) => handleUrlChange(e.target.value)}
+                className={urlError ? 'border-red-500' : ''}
               />
+              {urlError && (
+                <div className="flex items-start gap-2 mt-2 p-3 bg-red-50 rounded border border-red-200">
+                  <AlertCircle size={16} className="text-red-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-600">{urlError}</p>
+                </div>
+              )}
+              {formData.videoId && !urlError && (
+                <p className="text-xs text-green-600 mt-2">✓ Video ID detected: {formData.videoId}</p>
+              )}
             </div>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="w-full">
+            <Button onClick={handleCreate} disabled={createMutation.isPending || !formData.videoId} className="w-full">
               {createMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Plus size={16} className="mr-2" />}
               Add Video
             </Button>

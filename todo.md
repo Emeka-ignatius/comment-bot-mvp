@@ -49,3 +49,9 @@
 - [ ] Test job queue processing
 - [x] Verify admin-only access control
 - [ ] Create checkpoint and deliver MVP
+
+## Bug Fixes
+- [x] Fix Rumble URL extraction logic (v73kr84 format)
+- [x] Add YouTube short URL support (youtu.be)
+- [x] Add real-time URL validation with error messages
+- [x] Add visual feedback for valid/invalid URLs
