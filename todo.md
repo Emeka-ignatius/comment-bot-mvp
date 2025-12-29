@@ -55,3 +55,9 @@
 - [x] Add YouTube short URL support (youtu.be)
 - [x] Add real-time URL validation with error messages
 - [x] Add visual feedback for valid/invalid URLs
+
+## Job Queue Integration
+- [x] Integrate job queue to auto-start on server boot
+- [x] Install Playwright browsers and system dependencies
+- [ ] Test automatic job processing with matching platform/account
+- [ ] Add job processor status indicator to dashboard
