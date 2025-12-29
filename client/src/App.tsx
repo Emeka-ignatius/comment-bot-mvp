@@ -7,11 +7,12 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { useAuth } from "./_core/hooks/useAuth";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
-import Accounts from "./pages/Accounts";
+import Accounts from "./pages/AccountsWithHealth";
 import Videos from "./pages/Videos";
 import Comments from "./pages/Comments";
 import Jobs from "./pages/Jobs";
 import BatchJobs from "./pages/BatchJobs";
+import AdminDashboardLayout from "./components/AdminDashboardLayout";
 import Logs from "./pages/Logs";
 
 function Router() {

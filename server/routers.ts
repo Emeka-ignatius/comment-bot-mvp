@@ -9,6 +9,8 @@ import {
   createAccount,
   updateAccount,
   deleteAccount,
+  getAccountHealth,
+  updateAccountHealth,
   getVideosByUserId,
   createVideo,
   updateVideo,
@@ -48,6 +50,7 @@ export const appRouter = router({
       platform: z.enum(['youtube', 'rumble']),
       accountName: z.string(),
       cookies: z.string(),
+      cookieExpiresAt: z.date().optional(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       return createAccount({
@@ -55,6 +58,7 @@ export const appRouter = router({
         platform: input.platform,
         accountName: input.accountName,
         cookies: input.cookies,
+        cookieExpiresAt: input.cookieExpiresAt,
       });
     }),
     update: protectedProcedure.input(z.object({
@@ -63,6 +67,7 @@ export const appRouter = router({
       accountName: z.string().optional(),
       cookies: z.string().optional(),
       isActive: z.number().optional(),
+      cookieExpiresAt: z.date().optional(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       const { id, ...data } = input;
@@ -72,6 +77,21 @@ export const appRouter = router({
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       return deleteAccount(input.id);
     }),
+    health: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      return getAccountHealth(input.id);
+    }),
+    updateHealth: protectedProcedure.input(z.object({
+      id: z.number(),
+      cookieExpiresAt: z.date().optional(),
+      lastSuccessfulSubmission: z.date().optional(),
+      totalSuccessfulJobs: z.number().optional(),
+      totalFailedJobs: z.number().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      const { id, ...data } = input;
+      return updateAccountHealth(id, data);
+    }),
   }),
 
   videos: router({
@@ -80,24 +100,23 @@ export const appRouter = router({
       return getVideosByUserId(ctx.user.id);
     }),
     create: protectedProcedure.input(z.object({
+      videoUrl: z.string(),
       platform: z.enum(['youtube', 'rumble']),
-      videoUrl: z.string().url(),
       videoId: z.string(),
-      title: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       return createVideo({
         userId: ctx.user.id,
-        platform: input.platform,
         videoUrl: input.videoUrl,
+        platform: input.platform,
         videoId: input.videoId,
-        title: input.title,
       });
     }),
     update: protectedProcedure.input(z.object({
       id: z.number(),
-      title: z.string().optional(),
-      status: z.enum(['pending', 'in_progress', 'completed', 'failed']).optional(),
+      videoUrl: z.string().optional(),
+      platform: z.enum(['youtube', 'rumble']).optional(),
+      videoId: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       const { id, ...data } = input;

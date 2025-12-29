@@ -76,3 +76,12 @@
 - [x] Implement job preview before creation
 - [x] Add success confirmation with job count
 - [x] Write vitest tests for batch job creation (6 tests passing)
+
+## Account Health Monitoring Feature
+- [x] Update database schema to track cookieExpiresAt and lastSuccessfulSubmission
+- [x] Create database migrations
+- [x] Add account health calculation procedures (getAccountHealth, updateAccountHealth)
+- [x] Build account health UI with visual indicators (healthy, warning, critical)
+- [x] Add cookie expiration alerts and countdown
+- [x] Implement success rate tracking and job statistics
+- [x] Write vitest tests for health monitoring (11 tests passing)

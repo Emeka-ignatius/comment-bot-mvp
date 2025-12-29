@@ -214,3 +214,78 @@ export async function getLogsByJobId(jobId: number) {
   if (!db) throw new Error("Database not available");
   return db.select().from(logs).where(eq(logs.jobId, jobId));
 }
+
+// Account Health Monitoring
+export async function getAccountHealth(accountId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
+  if (result.length === 0) return null;
+  
+  const account = result[0];
+  const now = new Date();
+  
+  // Calculate health status
+  let healthStatus: 'healthy' | 'warning' | 'critical' = 'healthy';
+  let daysUntilExpiration: number | null = null;
+  
+  if (account.cookieExpiresAt) {
+    const expirationDate = new Date(account.cookieExpiresAt);
+    daysUntilExpiration = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilExpiration <= 0) {
+      healthStatus = 'critical'; // Expired
+    } else if (daysUntilExpiration <= 7) {
+      healthStatus = 'warning'; // Expiring soon
+    }
+  }
+  
+  const successRate = account.totalSuccessfulJobs + account.totalFailedJobs > 0
+    ? Math.round((account.totalSuccessfulJobs / (account.totalSuccessfulJobs + account.totalFailedJobs)) * 100)
+    : 0;
+  
+  return {
+    ...account,
+    healthStatus,
+    daysUntilExpiration,
+    successRate,
+    totalJobs: account.totalSuccessfulJobs + account.totalFailedJobs,
+  };
+}
+
+export async function updateAccountHealth(accountId: number, data: {
+  cookieExpiresAt?: Date;
+  lastSuccessfulSubmission?: Date;
+  totalSuccessfulJobs?: number;
+  totalFailedJobs?: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const updateData: Record<string, any> = {};
+  if (data.cookieExpiresAt) updateData.cookieExpiresAt = data.cookieExpiresAt;
+  if (data.lastSuccessfulSubmission) updateData.lastSuccessfulSubmission = data.lastSuccessfulSubmission;
+  if (data.totalSuccessfulJobs !== undefined) updateData.totalSuccessfulJobs = data.totalSuccessfulJobs;
+  if (data.totalFailedJobs !== undefined) updateData.totalFailedJobs = data.totalFailedJobs;
+  
+  return db.update(accounts).set(updateData).where(eq(accounts.id, accountId));
+}
+
+export async function incrementAccountJobStats(accountId: number, success: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const account = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
+  if (account.length === 0) throw new Error("Account not found");
+  
+  const updateData: Record<string, any> = {};
+  if (success) {
+    updateData.totalSuccessfulJobs = (account[0].totalSuccessfulJobs || 0) + 1;
+    updateData.lastSuccessfulSubmission = new Date();
+  } else {
+    updateData.totalFailedJobs = (account[0].totalFailedJobs || 0) + 1;
+  }
+  
+  return db.update(accounts).set(updateData).where(eq(accounts.id, accountId));
+}

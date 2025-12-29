@@ -35,6 +35,10 @@ export const accounts = mysqlTable("accounts", {
   accountName: varchar("accountName", { length: 255 }).notNull(),
   cookies: text("cookies").notNull(), // JSON stringified cookies
   isActive: int("isActive").default(1).notNull(),
+  cookieExpiresAt: timestamp("cookieExpiresAt"),
+  lastSuccessfulSubmission: timestamp("lastSuccessfulSubmission"),
+  totalSuccessfulJobs: int("totalSuccessfulJobs").default(0).notNull(),
+  totalFailedJobs: int("totalFailedJobs").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

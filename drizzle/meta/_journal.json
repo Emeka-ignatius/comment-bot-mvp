@@ -15,6 +15,13 @@
       "when": 1767000004401,
       "tag": "0001_rapid_pretty_boy",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1767027138174,
+      "tag": "0002_motionless_photon",
+      "breakpoints": true
     }
   ]
 }
