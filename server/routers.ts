@@ -2,6 +2,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
+import { batchJobsRouter } from "./routers/batchJobs";
 import { z } from "zod";
 import {
   getAccountsByUserId,
@@ -26,6 +27,7 @@ import {
 
 export const appRouter = router({
   system: systemRouter,
+  batch: batchJobsRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

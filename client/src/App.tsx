@@ -11,6 +11,7 @@ import Accounts from "./pages/Accounts";
 import Videos from "./pages/Videos";
 import Comments from "./pages/Comments";
 import Jobs from "./pages/Jobs";
+import BatchJobs from "./pages/BatchJobs";
 import Logs from "./pages/Logs";
 
 function Router() {
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/videos" component={Videos} />
       <Route path="/comments" component={Comments} />
       <Route path="/jobs" component={Jobs} />
+      <Route path="/batch" component={BatchJobs} />
       <Route path="/logs" component={Logs} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

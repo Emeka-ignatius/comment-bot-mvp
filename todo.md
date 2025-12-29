@@ -68,3 +68,11 @@
 - [x] Add better error messages for invalid cookies
 - [x] Implement mock automation for MVP testing
 - [x] Add environment flag to toggle mock mode (MOCK_AUTOMATION=true)
+
+## Batch Job Creation Feature
+- [x] Create batch job creation API procedure
+- [x] Build batch job creation UI component
+- [x] Add scheduling options (immediate, delay, spread over time)
+- [x] Implement job preview before creation
+- [x] Add success confirmation with job count
+- [x] Write vitest tests for batch job creation (6 tests passing)

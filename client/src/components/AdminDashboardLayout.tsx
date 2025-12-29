@@ -20,6 +20,7 @@ export default function AdminDashboardLayout({ children }: AdminDashboardLayoutP
     { label: 'Videos', href: '/videos', icon: '🎬' },
     { label: 'Comments', href: '/comments', icon: '💬' },
     { label: 'Jobs', href: '/jobs', icon: '⚙️' },
+    { label: 'Batch Create', href: '/batch', icon: '📦' },
     { label: 'Logs', href: '/logs', icon: '📝' },
   ];
 
