@@ -3,7 +3,7 @@ import { Page } from 'playwright';
 interface RumbleCommentOptions {
   videoUrl: string;
   comment: string;
-  cookies: Record<string, string>;
+  cookies: string | Record<string, string>;
 }
 
 export async function submitRumbleComment(

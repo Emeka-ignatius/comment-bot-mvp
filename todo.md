@@ -61,3 +61,10 @@
 - [x] Install Playwright browsers and system dependencies
 - [ ] Test automatic job processing with matching platform/account
 - [ ] Add job processor status indicator to dashboard
+
+## Cookie Handling Improvements
+- [x] Parse raw cookie strings from browser dev tools
+- [x] Validate cookie format before injection
+- [x] Add better error messages for invalid cookies
+- [x] Implement mock automation for MVP testing
+- [x] Add environment flag to toggle mock mode (MOCK_AUTOMATION=true)

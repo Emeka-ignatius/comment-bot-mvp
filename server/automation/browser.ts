@@ -1,4 +1,5 @@
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { parseCookies, validateCookies } from './cookieParser';
 
 interface BrowserConfig {
   headless?: boolean;
@@ -65,7 +66,6 @@ class BrowserAutomation {
 
     const page = await this.context.newPage();
 
-    // Set realistic headers
     await page.setExtraHTTPHeaders({
       'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
@@ -77,7 +77,6 @@ class BrowserAutomation {
       'Upgrade-Insecure-Requests': '1',
     });
 
-    // Mask webdriver property
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'webdriver', {
         get: () => false,
@@ -87,21 +86,32 @@ class BrowserAutomation {
     return page;
   }
 
-  async injectCookies(page: Page, cookies: Record<string, string>) {
+  async injectCookies(page: Page, cookiesInput: string | Record<string, string>, platform: 'youtube' | 'rumble' = 'youtube') {
     try {
-      const cookieArray = Object.entries(cookies).map(([name, value]) => ({
-        name,
-        value,
-        domain: name.includes('youtube') ? '.youtube.com' : '.rumble.com',
-        path: '/',
-        expires: Math.floor(Date.now() / 1000) + 86400 * 365, // 1 year
-        httpOnly: false,
-        secure: true,
-        sameSite: 'Lax' as const,
-      }));
+      let cookieArray;
+
+      if (typeof cookiesInput === 'string') {
+        cookieArray = parseCookies(cookiesInput, platform);
+      } else {
+        cookieArray = Object.entries(cookiesInput).map(([name, value]) => ({
+          name,
+          value,
+          domain: platform === 'youtube' ? '.youtube.com' : '.rumble.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1000) + 86400 * 365,
+          httpOnly: false,
+          secure: true,
+          sameSite: 'Lax' as const,
+        }));
+      }
+
+      const validation = validateCookies(cookieArray);
+      if (!validation.valid) {
+        throw new Error(`Invalid cookies: ${validation.errors.join(', ')}`);
+      }
 
       await page.context().addCookies(cookieArray);
-      console.log('[Browser] Cookies injected');
+      console.log(`[Browser] ${cookieArray.length} cookies injected for ${platform}`);
     } catch (error) {
       console.error('[Browser] Failed to inject cookies:', error);
       throw error;

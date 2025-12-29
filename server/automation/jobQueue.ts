@@ -1,10 +1,14 @@
 import { updateJob, createLog, getJobsByUserId, getPendingJobs } from '../db';
-import browserAutomation from './browser';
-import { submitYouTubeComment } from './youtube';
-import { submitRumbleComment } from './rumble';
+import { submitYouTubeComment as submitYouTubeCommentReal } from './youtube';
+import { submitRumbleComment as submitRumbleCommentReal } from './rumble';
+import { submitYouTubeComment as submitYouTubeCommentMock } from './mockYoutube';
+import { submitRumbleComment as submitRumbleCommentMock } from './mockRumble';
 import { getDb } from '../db';
+import { ENV } from '../_core/env';
 import { eq } from 'drizzle-orm';
 import { jobs, videos, accounts, commentTemplates } from '../../drizzle/schema';
+import browserAutomation from './browser';
+import mockBrowserAutomation from './mockBrowser';
 
 interface JobExecutionContext {
   jobId: number;
@@ -17,7 +21,7 @@ interface JobExecutionContext {
 let isProcessing = false;
 
 export async function startJobQueue() {
-  console.log('[JobQueue] Starting job processor');
+  console.log(`[JobQueue] Starting job processor (${ENV.mockMode ? 'MOCK MODE' : 'REAL MODE'})`);
   processNextJob();
 }
 
@@ -93,15 +97,29 @@ async function executeJob(context: JobExecutionContext) {
       throw new Error('Missing video, account, or comment template data');
     }
 
+    // Use mock or real browser based on environment
+    const browser = ENV.mockMode ? mockBrowserAutomation : browserAutomation;
+
     // Initialize browser
-    await browserAutomation.initialize({ headless: true });
+    await browser.initialize({ headless: true });
 
     // Create a new page
-    const page = await browserAutomation.createPage();
+    const page = await browser.createPage();
 
-    // Inject cookies
-    const cookies = JSON.parse(accountData.cookies);
-    await browserAutomation.injectCookies(page, cookies);
+    // Inject cookies - handle both raw strings and JSON
+    let cookies: string | Record<string, string>;
+    try {
+      cookies = JSON.parse(accountData.cookies);
+    } catch (e) {
+      // If not valid JSON, treat as raw cookie string
+      cookies = accountData.cookies;
+    }
+    
+    await browser.injectCookies(page, cookies, videoData.platform as 'youtube' | 'rumble');
+
+    // Select submission function based on mode and platform
+    const submitYouTubeComment = ENV.mockMode ? submitYouTubeCommentMock : submitYouTubeCommentReal;
+    const submitRumbleComment = ENV.mockMode ? submitRumbleCommentMock : submitRumbleCommentReal;
 
     // Submit comment based on platform
     let result;
@@ -109,20 +127,20 @@ async function executeJob(context: JobExecutionContext) {
       result = await submitYouTubeComment(page, {
         videoUrl: videoData.videoUrl,
         comment: commentData.content,
-        cookies,
+        cookies: typeof cookies === 'string' ? cookies : JSON.stringify(cookies),
       });
     } else if (videoData.platform === 'rumble') {
       result = await submitRumbleComment(page, {
         videoUrl: videoData.videoUrl,
         comment: commentData.content,
-        cookies,
+        cookies: typeof cookies === 'string' ? cookies : JSON.stringify(cookies),
       });
     } else {
       throw new Error(`Unsupported platform: ${videoData.platform}`);
     }
 
     // Close browser
-    await browserAutomation.close();
+    await browser.close();
 
     // Update job status based on result
     if (result.success) {
@@ -180,7 +198,8 @@ async function executeJob(context: JobExecutionContext) {
 
     // Close browser in case of error
     try {
-      await browserAutomation.close();
+      const browser = ENV.mockMode ? mockBrowserAutomation : browserAutomation;
+      await browser.close();
     } catch (e) {
       console.error('[JobQueue] Error closing browser:', e);
     }
