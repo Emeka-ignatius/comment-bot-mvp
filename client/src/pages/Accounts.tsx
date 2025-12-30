@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { trpc } from '@/lib/trpc';
 import { useState } from 'react';
-import { Loader2, Trash2, Plus } from 'lucide-react';
+import { Loader2, Trash2, Plus, AlertTriangle, RefreshCw, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { CookieInputHelper } from '@/components/CookieInputHelper';
 
 export default function Accounts() {
   const { data: accounts, isLoading, refetch } = trpc.accounts.list.useQuery();
@@ -17,6 +18,8 @@ export default function Accounts() {
     accountName: '',
     cookies: '',
   });
+  const [showCookieHelper, setShowCookieHelper] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'rumble'>('rumble');
 
   const handleCreate = async () => {
     if (!formData.accountName || !formData.cookies) {
@@ -55,43 +58,56 @@ export default function Accounts() {
         <Card className="p-6">
           <h2 className="text-xl font-semibold text-foreground mb-4">Add New Account</h2>
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Choose a platform and follow the guided setup to add your account
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Platform</label>
-                <select
-                  value={formData.platform}
-                  onChange={(e) => setFormData({ ...formData, platform: e.target.value as 'youtube' | 'rumble' })}
-                  className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
-                >
-                  <option value="youtube">YouTube</option>
-                  <option value="rumble">Rumble</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Account Name</label>
-                <Input
-                  type="text"
-                  placeholder="My YouTube Account"
-                  value={formData.accountName}
-                  onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
-                />
-              </div>
+              <Button
+                onClick={() => {
+                  setSelectedPlatform('rumble');
+                  setShowCookieHelper(true);
+                }}
+                variant="outline"
+                className="h-24 flex flex-col items-center justify-center gap-2"
+              >
+                <div className="text-2xl">🎥</div>
+                <div className="font-semibold">Add Rumble Account</div>
+              </Button>
+              <Button
+                onClick={() => {
+                  setSelectedPlatform('youtube');
+                  setShowCookieHelper(true);
+                }}
+                variant="outline"
+                className="h-24 flex flex-col items-center justify-center gap-2"
+              >
+                <div className="text-2xl">▶️</div>
+                <div className="font-semibold">Add YouTube Account</div>
+              </Button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Cookies (JSON)</label>
-              <textarea
-                placeholder='{"cookie_name": "cookie_value"}'
-                value={formData.cookies}
-                onChange={(e) => setFormData({ ...formData, cookies: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded bg-background text-foreground h-24 font-mono text-sm"
-              />
-            </div>
-            <Button onClick={handleCreate} disabled={createMutation.isPending} className="w-full">
-              {createMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <Plus size={16} className="mr-2" />}
-              Add Account
-            </Button>
           </div>
         </Card>
+
+        {showCookieHelper && (
+          <CookieInputHelper
+            platform={selectedPlatform}
+            onSuccess={async (cookies, accountName) => {
+              try {
+                await createMutation.mutateAsync({
+                  platform: selectedPlatform,
+                  accountName: accountName || `${selectedPlatform} Account`,
+                  cookies,
+                });
+                toast.success('Account added successfully!');
+                refetch();
+                setShowCookieHelper(false);
+              } catch (error) {
+                toast.error('Failed to add account');
+              }
+            }}
+            onCancel={() => setShowCookieHelper(false)}
+          />
+        )}
 
         {/* Accounts List */}
         <Card className="p-6">
@@ -102,23 +118,78 @@ export default function Accounts() {
             </div>
           ) : accounts && accounts.length > 0 ? (
             <div className="space-y-3">
-              {accounts.map((account) => (
-                <div key={account.id} className="flex items-center justify-between p-4 bg-accent rounded">
-                  <div>
-                    <p className="font-medium text-foreground">{account.accountName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {account.platform === 'youtube' ? '🎬 YouTube' : '🎥 Rumble'}
-                    </p>
+              {accounts.map((account) => {
+                // Calculate cookie expiration
+                const expiresAt = account.cookieExpiresAt ? new Date(account.cookieExpiresAt) : null;
+                const now = new Date();
+                const daysUntilExpiry = expiresAt ? Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry < 7;
+                const isExpired = daysUntilExpiry !== null && daysUntilExpiry < 0;
+                
+                return (
+                  <div key={account.id} className="flex items-center justify-between p-4 bg-accent rounded border-l-4" style={{
+                    borderLeftColor: isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : '#22c55e'
+                  }}>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground">{account.accountName}</p>
+                        {isExpired && (
+                          <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-full flex items-center gap-1">
+                            <AlertTriangle size={12} />
+                            Expired
+                          </span>
+                        )}
+                        {isExpiringSoon && !isExpired && (
+                          <span className="px-2 py-0.5 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-full flex items-center gap-1">
+                            <AlertTriangle size={12} />
+                            Expires in {daysUntilExpiry} days
+                          </span>
+                        )}
+                        {!isExpiringSoon && !isExpired && daysUntilExpiry !== null && (
+                          <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full flex items-center gap-1">
+                            <CheckCircle size={12} />
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {account.platform === 'youtube' ? '🎬 YouTube' : '🎥 Rumble'}
+                        {daysUntilExpiry !== null && !isExpired && (
+                          <span className="ml-2">• {daysUntilExpiry} days remaining</span>
+                        )}
+                      </p>
+                      {account.lastSuccessfulSubmission && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Last used: {new Date(account.lastSuccessfulSubmission).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {(isExpired || isExpiringSoon) && (
+                        <Button
+                          onClick={() => {
+                            setSelectedPlatform(account.platform);
+                            setShowCookieHelper(true);
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1"
+                        >
+                          <RefreshCw size={14} />
+                          Refresh Cookies
+                        </Button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(account.id)}
+                        disabled={deleteMutation.isPending}
+                        className="p-2 hover:bg-destructive rounded text-muted-foreground hover:text-destructive-foreground"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(account.id)}
-                    disabled={deleteMutation.isPending}
-                    className="p-2 hover:bg-destructive rounded text-muted-foreground hover:text-destructive-foreground"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="text-muted-foreground">No accounts yet. Add one to get started.</p>

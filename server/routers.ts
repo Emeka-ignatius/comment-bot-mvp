@@ -54,12 +54,23 @@ export const appRouter = router({
       cookieExpiresAt: z.date().optional(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      
+      // Auto-calculate cookie expiration if not provided
+      let cookieExpiresAt = input.cookieExpiresAt;
+      if (!cookieExpiresAt) {
+        // Default expiration: 30 days from now
+        // In production, you could parse cookie max-age or expires attributes
+        const expirationDate = new Date();
+        expirationDate.setDate(expirationDate.getDate() + 30);
+        cookieExpiresAt = expirationDate;
+      }
+      
       return createAccount({
         userId: ctx.user.id,
         platform: input.platform,
         accountName: input.accountName,
         cookies: input.cookies,
-        cookieExpiresAt: input.cookieExpiresAt,
+        cookieExpiresAt,
       });
     }),
     update: protectedProcedure.input(z.object({

@@ -123,6 +123,18 @@ async function executeJob(context: JobExecutionContext) {
     const db = await getDb();
     if (!db) throw new Error('Database not available');
 
+    // Get job details for rate limiting
+    const [jobData] = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
+    if (!jobData) throw new Error('Job not found');
+
+    // Apply rate limiting delay
+    const minDelay = jobData.minDelaySeconds || 30;
+    const maxDelay = jobData.maxDelaySeconds || 60;
+    const randomDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+    
+    console.log(`[JobQueue] Rate limiting: waiting ${randomDelay}s before posting (range: ${minDelay}-${maxDelay}s)`);
+    await new Promise(resolve => setTimeout(resolve, randomDelay * 1000));
+
     await updateJob(jobId, { status: 'running', startedAt: new Date() });
 
     const [videoData] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);

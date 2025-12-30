@@ -95,6 +95,8 @@ export const jobs = mysqlTable("jobs", {
   startedAt: timestamp("startedAt"),
   completedAt: timestamp("completedAt"),
   errorMessage: text("errorMessage"),
+  minDelaySeconds: int("minDelaySeconds").default(30), // Minimum delay before posting (default 30s)
+  maxDelaySeconds: int("maxDelaySeconds").default(60), // Maximum delay before posting (default 60s)
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -140,3 +140,28 @@
 - [x] Test chat ID extraction with live stream URL (https://rumble.com/v73mkg8-shakers.html → 425684736)
 - [x] Fix username field issue (removed - Rumble infers from cookies)
 - [x] Successfully posted test comment to live stream via direct API
+
+## Rate Limiting Controls
+- [x] Add minDelay and maxDelay fields to jobs table
+- [x] Add rate limiting configuration to batch job creation
+- [x] Implement random delay between comments (30-60 seconds default)
+- [x] Add rate limiting controls to job queue processor
+- [ ] Test rate limiting with multiple jobs
+
+## Embedded Login Flow (PRIORITY)
+- [x] Design embedded login UI component for Rumble
+- [x] Create improved cookie input helper with step-by-step instructions
+- [x] Add cookie validation (checks for required cookies)
+- [x] Store captured cookies automatically in database
+- [x] Add platform selection buttons to accounts page
+- [x] Add YouTube cookie input support
+- [x] Replace basic form with guided cookie helper
+
+## Cookie Expiration Monitoring
+- [x] Add cookie expiration detection logic
+- [x] Calculate and display "expires in X days" for each account
+- [x] Add visual alerts for expiring cookies (< 7 days)
+- [x] Implement one-click refresh button for expired accounts
+- [x] Add automatic cookie expiration date (30 days default)
+- [x] Add color-coded status indicators (green/yellow/red)
+- [x] Show last used date for each account
