@@ -1,0 +1,25 @@
+{
+  "query": "SELECT id, accountName, platform FROM accounts LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qmF7zQddKSdTNds.root --database gPPU9FGxZYYEJyDCRUmy73 --execute SELECT id, accountName, platform FROM accounts LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "accountName": "Test Account",
+      "platform": "youtube"
+    },
+    {
+      "id": "30001",
+      "accountName": "Devheck",
+      "platform": "rumble"
+    },
+    {
+      "id": "30002",
+      "accountName": "New Cookie Rumble",
+      "platform": "rumble"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\taccountName\tplatform\n1\tTest Account\tyoutube\n30001\tDevheck\trumble\n30002\tNew Cookie Rumble\trumble\n",
+  "stderr": "",
+  "execution_time_ms": 119
+}

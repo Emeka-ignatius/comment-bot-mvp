@@ -1,0 +1,22 @@
+{
+  "query": "SELECT id, openId, name, role FROM users LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qmF7zQddKSdTNds.root --database gPPU9FGxZYYEJyDCRUmy73 --execute SELECT id, openId, name, role FROM users LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "openId": "LLqCiXVxGPUufR63KvTft2",
+      "name": "Base Coin",
+      "role": "admin"
+    },
+    {
+      "id": "30036",
+      "openId": "dpmwHXHp92yMiaaDmHrUbV",
+      "name": "Ignatius Emeka",
+      "role": "user"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\trole\n1\tLLqCiXVxGPUufR63KvTft2\tBase Coin\tadmin\n30036\tdpmwHXHp92yMiaaDmHrUbV\tIgnatius Emeka\tuser\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

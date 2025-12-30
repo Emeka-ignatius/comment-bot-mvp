@@ -1,14 +1,14 @@
-import { updateJob, createLog, getJobsByUserId, getPendingJobs } from '../db';
-import { submitYouTubeComment as submitYouTubeCommentReal } from './youtube';
-import { submitRumbleComment as submitRumbleCommentReal } from './rumble';
-import { submitYouTubeComment as submitYouTubeCommentMock } from './mockYoutube';
-import { submitRumbleComment as submitRumbleCommentMock } from './mockRumble';
+import { updateJob, createLog, incrementAccountJobStats } from '../db';
 import { getDb } from '../db';
 import { ENV } from '../_core/env';
 import { eq } from 'drizzle-orm';
 import { jobs, videos, accounts, commentTemplates } from '../../drizzle/schema';
-import browserAutomation from './browser';
-import mockBrowserAutomation from './mockBrowser';
+
+// Import real and mock automation
+import { postRumbleComment } from './realRumble';
+import { postRumbleCommentDirect, extractChatIdFromUrl } from './directRumbleAPI';
+import { submitRumbleComment as submitRumbleCommentMock } from './mockRumble';
+import { submitYouTubeComment as submitYouTubeCommentMock } from './mockYoutube';
 
 interface JobExecutionContext {
   jobId: number;
@@ -19,25 +19,55 @@ interface JobExecutionContext {
 }
 
 let isProcessing = false;
+let isRunning = false;
+let processingStartTime: number | null = null;
+const JOB_TIMEOUT_MS = 120000; // 2 minutes max per job
 
 export async function startJobQueue() {
+  if (isRunning) {
+    console.log('[JobQueue] Already running');
+    return;
+  }
+  
+  isRunning = true;
+  isProcessing = false; // Reset processing state on start
+  processingStartTime = null;
+  
   console.log(`[JobQueue] Starting job processor (${ENV.mockMode ? 'MOCK MODE' : 'REAL MODE'})`);
+  console.log(`[JobQueue] Mock mode env value: ${process.env.MOCK_AUTOMATION}`);
   processNextJob();
 }
 
 async function processNextJob() {
+  if (!isRunning) {
+    console.log('[JobQueue] Job queue stopped');
+    return;
+  }
+  
+  // Check for stuck job (timeout)
+  if (isProcessing && processingStartTime) {
+    const elapsed = Date.now() - processingStartTime;
+    if (elapsed > JOB_TIMEOUT_MS) {
+      console.error(`[JobQueue] Job timed out after ${elapsed}ms, resetting state`);
+      isProcessing = false;
+      processingStartTime = null;
+    }
+  }
+  
   if (isProcessing) {
-    console.log('[JobQueue] Already processing a job, skipping');
+    setTimeout(processNextJob, 3000);
     return;
   }
 
   try {
     isProcessing = true;
+    processingStartTime = Date.now();
 
     const db = await getDb();
     if (!db) {
       console.error('[JobQueue] Database not available');
       isProcessing = false;
+      processingStartTime = null;
       setTimeout(processNextJob, 5000);
       return;
     }
@@ -50,13 +80,24 @@ async function processNextJob() {
       .limit(1);
 
     if (pendingJobs.length === 0) {
-      console.log('[JobQueue] No pending jobs');
       isProcessing = false;
+      processingStartTime = null;
       setTimeout(processNextJob, 5000);
       return;
     }
 
     const job = pendingJobs[0];
+    const now = new Date();
+    
+    // Check if job is scheduled for later
+    if (job.scheduledAt && new Date(job.scheduledAt) > now) {
+      console.log(`[JobQueue] Job ${job.id} scheduled for ${job.scheduledAt}, skipping`);
+      isProcessing = false;
+      processingStartTime = null;
+      setTimeout(processNextJob, 5000);
+      return;
+    }
+    
     console.log('[JobQueue] Processing job:', job.id);
 
     await executeJob({
@@ -70,7 +111,7 @@ async function processNextJob() {
     console.error('[JobQueue] Error processing job:', error);
   } finally {
     isProcessing = false;
-    // Schedule next job processing after a delay
+    processingStartTime = null;
     setTimeout(processNextJob, 3000);
   }
 }
@@ -82,13 +123,8 @@ async function executeJob(context: JobExecutionContext) {
     const db = await getDb();
     if (!db) throw new Error('Database not available');
 
-    // Update job status to running
-    await updateJob(jobId, {
-      status: 'running',
-      startedAt: new Date(),
-    });
+    await updateJob(jobId, { status: 'running', startedAt: new Date() });
 
-    // Fetch video, account, and comment template
     const [videoData] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
     const [accountData] = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
     const [commentData] = await db.select().from(commentTemplates).where(eq(commentTemplates.id, commentTemplateId)).limit(1);
@@ -97,116 +133,97 @@ async function executeJob(context: JobExecutionContext) {
       throw new Error('Missing video, account, or comment template data');
     }
 
-    // Use mock or real browser based on environment
-    const browser = ENV.mockMode ? mockBrowserAutomation : browserAutomation;
+    console.log(`[JobQueue] Executing job ${jobId}:`);
+    console.log(`  - Platform: ${videoData.platform}`);
+    console.log(`  - Video: ${videoData.videoUrl}`);
+    console.log(`  - Account: ${accountData.accountName}`);
+    console.log(`  - Comment: ${commentData.content.substring(0, 50)}...`);
+    console.log(`  - Mock Mode: ${ENV.mockMode}`);
 
-    // Initialize browser
-    await browser.initialize({ headless: true });
+    let result: { success: boolean; message: string; isLive?: boolean };
 
-    // Create a new page
-    const page = await browser.createPage();
-
-    // Inject cookies - handle both raw strings and JSON
-    let cookies: string | Record<string, string>;
-    try {
-      cookies = JSON.parse(accountData.cookies);
-    } catch (e) {
-      // If not valid JSON, treat as raw cookie string
-      cookies = accountData.cookies;
+    if (ENV.mockMode) {
+      console.log('[JobQueue] Using MOCK automation');
+      
+      if (videoData.platform === 'youtube') {
+        result = await submitYouTubeCommentMock(null as any, {
+          videoUrl: videoData.videoUrl,
+          comment: commentData.content,
+          cookies: accountData.cookies,
+        });
+      } else if (videoData.platform === 'rumble') {
+        result = await submitRumbleCommentMock(null as any, {
+          videoUrl: videoData.videoUrl,
+          comment: commentData.content,
+          cookies: accountData.cookies,
+        });
+      } else {
+        throw new Error(`Unsupported platform: ${videoData.platform}`);
+      }
+     } else {
+      console.log('[JobQueue] Using REAL automation (Direct API)');
+      
+      if (videoData.platform === 'rumble') {
+        // Extract chat ID from video URL
+        const chatId = extractChatIdFromUrl(videoData.videoUrl);
+        if (!chatId) {
+          throw new Error('Could not extract chat ID from video URL');
+        }
+        
+        console.log(`[JobQueue] Using Direct Rumble API with chat ID: ${chatId}`);
+        
+        const rumbleResult = await postRumbleCommentDirect(
+          chatId,
+          commentData.content,
+          accountData.cookies
+        );
+        
+        console.log('[JobQueue] postRumbleComment result:', rumbleResult);
+        
+        result = {
+          success: rumbleResult.success,
+          message: rumbleResult.success 
+            ? `Comment posted successfully on Rumble (direct API)`
+            : `Failed to post comment: ${rumbleResult.error}`,
+        };
+      } else {
+        throw new Error(`Unsupported platform: ${videoData.platform}`);
+      }
     }
-    
-    await browser.injectCookies(page, cookies, videoData.platform as 'youtube' | 'rumble');
 
-    // Select submission function based on mode and platform
-    const submitYouTubeComment = ENV.mockMode ? submitYouTubeCommentMock : submitYouTubeCommentReal;
-    const submitRumbleComment = ENV.mockMode ? submitRumbleCommentMock : submitRumbleCommentReal;
-
-    // Submit comment based on platform
-    let result;
-    if (videoData.platform === 'youtube') {
-      result = await submitYouTubeComment(page, {
-        videoUrl: videoData.videoUrl,
-        comment: commentData.content,
-        cookies: typeof cookies === 'string' ? cookies : JSON.stringify(cookies),
-      });
-    } else if (videoData.platform === 'rumble') {
-      result = await submitRumbleComment(page, {
-        videoUrl: videoData.videoUrl,
-        comment: commentData.content,
-        cookies: typeof cookies === 'string' ? cookies : JSON.stringify(cookies),
-      });
-    } else {
-      throw new Error(`Unsupported platform: ${videoData.platform}`);
-    }
-
-    // Close browser
-    await browser.close();
-
-    // Update job status based on result
     if (result.success) {
-      await updateJob(jobId, {
-        status: 'completed',
-        completedAt: new Date(),
-      });
-
-      await createLog({
-        userId,
-        jobId,
-        platform: videoData.platform,
-        status: 'success',
-        message: result.message,
-      });
-
+      await updateJob(jobId, { status: 'completed', completedAt: new Date() });
+      await createLog({ userId, jobId, platform: videoData.platform, status: 'success', message: result.message });
+      await incrementAccountJobStats(accountId, true);
       console.log('[JobQueue] Job completed successfully:', jobId);
     } else {
-      await updateJob(jobId, {
-        status: 'failed',
-        errorMessage: result.message,
-        completedAt: new Date(),
-      });
-
-      await createLog({
-        userId,
-        jobId,
-        platform: videoData.platform,
-        status: 'failed',
-        message: result.message,
-        errorDetails: result.message,
-      });
-
+      await updateJob(jobId, { status: 'failed', errorMessage: result.message, completedAt: new Date() });
+      await createLog({ userId, jobId, platform: videoData.platform, status: 'failed', message: result.message, errorDetails: result.message });
+      await incrementAccountJobStats(accountId, false);
       console.error('[JobQueue] Job failed:', jobId, result.message);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-
-    await updateJob(jobId, {
-      status: 'failed',
-      errorMessage,
-      completedAt: new Date(),
-    });
-
-    await createLog({
-      userId,
-      jobId,
-      platform: 'youtube', // Default to youtube for error logging
-      status: 'failed',
-      message: 'Job execution error',
-      errorDetails: errorMessage,
-    });
-
     console.error('[JobQueue] Job execution error:', jobId, errorMessage);
 
-    // Close browser in case of error
+    await updateJob(jobId, { status: 'failed', errorMessage, completedAt: new Date() });
+
+    let platform: 'youtube' | 'rumble' = 'youtube';
     try {
-      const browser = ENV.mockMode ? mockBrowserAutomation : browserAutomation;
-      await browser.close();
-    } catch (e) {
-      console.error('[JobQueue] Error closing browser:', e);
-    }
+      const db = await getDb();
+      if (db) {
+        const [videoData] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
+        if (videoData) platform = videoData.platform;
+      }
+    } catch {}
+
+    await createLog({ userId, jobId, platform, status: 'failed', message: 'Job execution error', errorDetails: errorMessage });
   }
 }
 
 export function stopJobQueue() {
   console.log('[JobQueue] Stopping job processor');
+  isRunning = false;
   isProcessing = false;
+  processingStartTime = null;
 }

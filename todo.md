@@ -85,3 +85,34 @@
 - [x] Add cookie expiration alerts and countdown
 - [x] Implement success rate tracking and job statistics
 - [x] Write vitest tests for health monitoring (11 tests passing)
+
+## Rumble Selfbot API Integration
+- [x] Analyze rumble-selfbot-api source code structure
+- [x] Install playwright-anti-fingerprinter and dependencies
+- [x] Configure Playwright with anti-fingerprinting
+- [x] Implement real comment submission for live streams
+- [ ] Implement view automation with watch time tracking
+- [x] Add cookie injection from stored accounts
+- [ ] Create API endpoint for AI system integration
+- [ ] Test with real Rumble account
+- [x] Write vitest tests for cookie parsing (10 tests passing)
+
+## Playwright-Extra with Stealth Plugin (Cloudflare Bypass)
+- [ ] Install playwright-extra and puppeteer-extra-plugin-stealth
+- [ ] Rewrite realRumble.ts to use playwright-extra
+- [ ] Add stealth plugin configuration
+- [ ] Test Cloudflare bypass
+- [ ] Test real comment posting on live stream
+- [ ] Verify comments appear in chat
+
+## Direct Rumble API Implementation (Cloudflare Bypass Alternative)
+- [x] Create directRumbleAPI.ts with reverse-engineered API endpoint
+- [x] Implement extractChatIdFromUrl helper function
+- [x] Implement postRumbleCommentDirect with axios HTTP requests
+- [x] Update job queue to use direct API instead of Playwright
+- [x] Install axios dependency
+- [x] Restart server with direct API integration
+- [ ] Test direct API with real Rumble account cookies (READY FOR USER TESTING)
+- [ ] Verify comments post successfully on live stream (READY FOR USER TESTING)
+- [ ] Monitor for API detection/blocking
+- [x] Write vitest tests for direct API functions

@@ -1,0 +1,38 @@
+{
+  "query": "SELECT * FROM jobs ORDER BY id DESC LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qmF7zQddKSdTNds.root --database gPPU9FGxZYYEJyDCRUmy73 --execute SELECT * FROM jobs ORDER BY id DESC LIMIT 3;",
+  "rows": [
+    {
+      "id": "60015",
+      "userId": "1",
+      "videoId": "60002",
+      "accountId": "60001",
+      "commentTemplateId": "60001",
+      "status": "running",
+      "scheduledAt": "NULL",
+      "startedAt": "2025-12-29 18:13:52",
+      "completedAt": "NULL",
+      "errorMessage": "NULL",
+      "createdAt": "2025-12-29 18:13:51",
+      "updatedAt": "2025-12-29 18:13:51"
+    },
+    {
+      "id": "60014",
+      "userId": "1",
+      "videoId": "60002",
+      "accountId": "60001",
+      "commentTemplateId": "60001",
+      "status": "completed",
+      "scheduledAt": "NULL",
+      "startedAt": "2025-12-29 18:11:44",
+      "completedAt": "2025-12-29 18:11:49",
+      "errorMessage": "NULL",
+      "createdAt": "2025-12-29 18:11:43",
+      "updatedAt": "2025-12-29 18:11:48"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tvideoId\taccountId\tcommentTemplateId\tstatus\tscheduledAt\tstartedAt\tcompletedAt\terrorMessage\tcreatedAt\tupdatedAt\n60015\t1\t60002\t60001\t60001\trunning\tNULL\t2025-12-29 18:13:52\tNULL\tNULL\t2025-12-29 18:13:51\t2025-12-29 18:13:51\n60014\t1\t60002\t60001\t60001\tcompleted\tNULL\t2025-12-29 18:11:44\t2025-12-29 18:11:49\tNULL\t2025-12-29 18:11:43\t2025-12-29 18:11:48\n",
+  "stderr": "",
+  "execution_time_ms": 88
+}

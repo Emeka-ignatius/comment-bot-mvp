@@ -1,0 +1,18 @@
+{
+  "query": "SELECT j.id, j.status, j.createdAt, j.completedAt, v.platform, v.videoUrl FROM jobs j JOIN videos v ON j.videoId = v.id ORDER BY j.id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qmF7zQddKSdTNds.root --database gPPU9FGxZYYEJyDCRUmy73 --execute SELECT j.id, j.status, j.createdAt, j.completedAt, v.platform, v.videoUrl FROM jobs j JOIN videos v ON j.videoId = v.id ORDER BY j.id DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "60014",
+      "status": "completed",
+      "createdAt": "2025-12-29 18:11:43",
+      "completedAt": "2025-12-29 18:11:49",
+      "platform": "rumble",
+      "videoUrl": "https://rumble.com/v73kr84-nitro-age-returns.html"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tstatus\tcreatedAt\tcompletedAt\tplatform\tvideoUrl\n60014\tcompleted\t2025-12-29 18:11:43\t2025-12-29 18:11:49\trumble\thttps://rumble.com/v73kr84-nitro-age-returns.html\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}
