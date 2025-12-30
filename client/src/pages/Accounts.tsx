@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Loader2, Trash2, Plus, AlertTriangle, RefreshCw, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { CookieInputHelper } from '@/components/CookieInputHelper';
+import { EmbeddedLoginDialog } from '@/components/EmbeddedLoginDialog';
 
 export default function Accounts() {
   const { data: accounts, isLoading, refetch } = trpc.accounts.list.useQuery();
@@ -19,7 +20,9 @@ export default function Accounts() {
     cookies: '',
   });
   const [showCookieHelper, setShowCookieHelper] = useState(false);
+  const [showEmbeddedLogin, setShowEmbeddedLogin] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'rumble'>('rumble');
+  const [loginMethod, setLoginMethod] = useState<'embedded' | 'manual'>('embedded');
 
   const handleCreate = async () => {
     if (!formData.accountName || !formData.cookies) {
@@ -59,30 +62,65 @@ export default function Accounts() {
           <h2 className="text-xl font-semibold text-foreground mb-4">Add New Account</h2>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Choose a platform and follow the guided setup to add your account
+              Choose a platform and login method to add your account
             </p>
+            
+            {/* Login Method Selection */}
+            <div className="flex gap-2 p-2 bg-muted rounded-lg">
+              <Button
+                variant={loginMethod === 'embedded' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setLoginMethod('embedded')}
+                className="flex-1"
+              >
+                🚀 Auto Login (Recommended)
+              </Button>
+              <Button
+                variant={loginMethod === 'manual' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setLoginMethod('manual')}
+                className="flex-1"
+              >
+                📝 Manual Cookie Input
+              </Button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Button
                 onClick={() => {
                   setSelectedPlatform('rumble');
-                  setShowCookieHelper(true);
+                  if (loginMethod === 'embedded') {
+                    setShowEmbeddedLogin(true);
+                  } else {
+                    setShowCookieHelper(true);
+                  }
                 }}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
                 <div className="text-2xl">🎥</div>
                 <div className="font-semibold">Add Rumble Account</div>
+                <div className="text-xs text-muted-foreground">
+                  {loginMethod === 'embedded' ? 'Auto Login' : 'Manual Input'}
+                </div>
               </Button>
               <Button
                 onClick={() => {
                   setSelectedPlatform('youtube');
-                  setShowCookieHelper(true);
+                  if (loginMethod === 'embedded') {
+                    setShowEmbeddedLogin(true);
+                  } else {
+                    setShowCookieHelper(true);
+                  }
                 }}
                 variant="outline"
                 className="h-24 flex flex-col items-center justify-center gap-2"
               >
                 <div className="text-2xl">▶️</div>
                 <div className="font-semibold">Add YouTube Account</div>
+                <div className="text-xs text-muted-foreground">
+                  {loginMethod === 'embedded' ? 'Auto Login' : 'Manual Input'}
+                </div>
               </Button>
             </div>
           </div>
@@ -106,6 +144,27 @@ export default function Accounts() {
               }
             }}
             onCancel={() => setShowCookieHelper(false)}
+          />
+        )}
+
+        {showEmbeddedLogin && (
+          <EmbeddedLoginDialog
+            platform={selectedPlatform}
+            onSuccess={async (cookies, accountName) => {
+              try {
+                await createMutation.mutateAsync({
+                  platform: selectedPlatform,
+                  accountName: accountName || `${selectedPlatform} Account`,
+                  cookies,
+                });
+                toast.success('Account added successfully via auto-login!');
+                refetch();
+                setShowEmbeddedLogin(false);
+              } catch (error) {
+                toast.error('Failed to add account');
+              }
+            }}
+            onCancel={() => setShowEmbeddedLogin(false)}
           />
         )}
 

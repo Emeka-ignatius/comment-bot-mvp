@@ -27,6 +27,7 @@ import {
   getLogsByJobId,
 } from "./db";
 import { postRumbleCommentDirect, extractChatIdFromUrl } from "./automation/directRumbleAPI";
+import { initializeLoginSession, getSessionStatus, cancelLoginSession } from "./automation/embeddedLogin";
 
 export const appRouter = router({
   system: systemRouter,
@@ -251,6 +252,31 @@ export const appRouter = router({
       );
       
       return result;
+    }),
+  }),
+  
+  // Embedded login procedures
+  embeddedLogin: router({
+    initiate: protectedProcedure.input(z.object({
+      platform: z.enum(['rumble', 'youtube']),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      return await initializeLoginSession(input.platform);
+    }),
+    
+    status: protectedProcedure.input(z.object({
+      sessionId: z.string(),
+    })).query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      return getSessionStatus(input.sessionId);
+    }),
+    
+    cancel: protectedProcedure.input(z.object({
+      sessionId: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      await cancelLoginSession(input.sessionId);
+      return { success: true };
     }),
   }),
 });

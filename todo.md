@@ -165,3 +165,35 @@
 - [x] Add automatic cookie expiration date (30 days default)
 - [x] Add color-coded status indicators (green/yellow/red)
 - [x] Show last used date for each account
+
+## Embedded Login Flow with Puppeteer
+- [x] Install Puppeteer and dependencies
+- [x] Create backend service for browser automation
+- [x] Implement Rumble login automation with cookie capture
+- [x] Implement YouTube login automation with cookie capture
+- [x] Create tRPC procedure for initiating login session
+- [x] Create tRPC procedure for checking login status
+- [x] Create tRPC procedure for retrieving captured cookies
+- [x] Update frontend to use embedded login flow
+- [x] Add loading states and progress indicators
+- [x] Add login method selection (Auto Login vs Manual)
+- [ ] Test Rumble embedded login (READY FOR USER TESTING)
+- [ ] Test YouTube embedded login (READY FOR USER TESTING)
+
+## Browser Extension for Cookie Capture
+- [ ] Create Chrome extension manifest
+- [ ] Implement cookie extraction script
+- [ ] Add API endpoint for receiving cookies from extension
+- [ ] Build extension popup UI
+- [ ] Test extension with Rumble
+- [ ] Test extension with YouTube
+- [ ] Package extension for distribution
+
+## AI Auto-Comment System
+- [ ] Integrate audio transcription for live streams
+- [ ] Implement real-time comment generation with LLM
+- [ ] Add automatic account assignment logic
+- [ ] Create automatic job creation from AI comments
+- [ ] Add live stream monitoring service
+- [ ] Test AI comment generation
+- [ ] Test automatic job creation
