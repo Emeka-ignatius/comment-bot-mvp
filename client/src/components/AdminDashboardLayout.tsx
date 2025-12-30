@@ -17,6 +17,7 @@ export default function AdminDashboardLayout({ children }: AdminDashboardLayoutP
   const navigationItems = [
     { label: 'Dashboard', href: '/dashboard', icon: '📊' },
     { label: 'Accounts', href: '/accounts', icon: '🔐' },
+    { label: 'Login An Account', href: '/login-account', icon: '🚀' },
     { label: 'Videos', href: '/videos', icon: '🎬' },
     { label: 'Comments', href: '/comments', icon: '💬' },
     { label: 'Jobs', href: '/jobs', icon: '⚙️' },

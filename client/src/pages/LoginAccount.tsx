@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { CookieInputHelper } from '@/components/CookieInputHelper';
 import { EmbeddedLoginDialog } from '@/components/EmbeddedLoginDialog';
 
-export default function Accounts() {
+export default function LoginAccount() {
   const { data: accounts, isLoading, refetch } = trpc.accounts.list.useQuery();
   const createMutation = trpc.accounts.create.useMutation();
   const deleteMutation = trpc.accounts.delete.useMutation();

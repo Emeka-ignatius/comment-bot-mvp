@@ -197,3 +197,10 @@
 - [ ] Add live stream monitoring service
 - [ ] Test AI comment generation
 - [ ] Test automatic job creation
+
+## Add "Login An Account" Sidebar Link
+- [x] Rename current Accounts.tsx to LoginAccount.tsx
+- [x] Update App.tsx to import AccountsWithHealth for /accounts route
+- [x] Add new /login-account route for LoginAccount.tsx
+- [x] Update AdminDashboardLayout sidebar to include "Login An Account" link
+- [ ] Test both pages work correctly
