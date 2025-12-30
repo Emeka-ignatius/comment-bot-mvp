@@ -116,3 +116,27 @@
 - [ ] Verify comments post successfully on live stream (READY FOR USER TESTING)
 - [ ] Monitor for API detection/blocking
 - [x] Write vitest tests for direct API functions
+
+## CRITICAL BUGS
+- [x] Fix job stuck in "running" state for 2+ hours (RESOLVED - was old Playwright jobs)
+- [x] Debug direct API implementation - not posting comments (RESOLVED - chat ID extraction + username field fix)
+- [x] Replace current API implementation with user's working code (RESOLVED - direct API working)
+
+## Embedded Login Flow Feature
+- [ ] Design embedded login UI for Rumble accounts
+- [ ] Implement iframe/popup login flow for Rumble
+- [ ] Add automatic cookie capture after login
+- [ ] Store captured cookies in database
+- [ ] Add cookie expiration detection and alerts
+- [ ] Design embedded login UI for YouTube accounts
+- [ ] Implement iframe/popup login flow for YouTube
+- [ ] Test automatic cookie refresh on re-login
+
+## Chat ID Extraction Fix (CRITICAL)
+- [x] Implement function to fetch Rumble page and extract chat ID from HTML/JS
+- [x] Add chatId field to videos table schema
+- [x] Update video creation to automatically fetch and store chat ID
+- [x] Update job queue to use stored chat ID instead of extracting from URL
+- [x] Test chat ID extraction with live stream URL (https://rumble.com/v73mkg8-shakers.html → 425684736)
+- [x] Fix username field issue (removed - Rumble infers from cookies)
+- [x] Successfully posted test comment to live stream via direct API

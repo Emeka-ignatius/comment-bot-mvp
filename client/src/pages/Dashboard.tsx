@@ -1,13 +1,28 @@
 import AdminDashboardLayout from '@/components/AdminDashboardLayout';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { trpc } from '@/lib/trpc';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
   const { data: accounts, isLoading: accountsLoading } = trpc.accounts.list.useQuery();
   const { data: videos, isLoading: videosLoading } = trpc.videos.list.useQuery();
   const { data: jobs, isLoading: jobsLoading } = trpc.jobs.list.useQuery();
   const { data: logs, isLoading: logsLoading } = trpc.logs.list.useQuery();
+  
+  const testDirectAPI = trpc.test.directAPI.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success('Test comment posted successfully!');
+      } else {
+        toast.error(`Test failed: ${result.error}`);
+      }
+    },
+    onError: (error) => {
+      toast.error(`Test error: ${error.message}`);
+    },
+  });
 
   const stats = [
     { label: 'Total Accounts', value: accounts?.length || 0, icon: '🔐' },
@@ -21,7 +36,31 @@ export default function Dashboard() {
   return (
     <AdminDashboardLayout>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <Button 
+            onClick={() => {
+              const firstAccount = accounts?.[0];
+              const firstVideo = videos?.[0];
+              if (!firstAccount || !firstVideo) {
+                toast.error('Need at least one account and one video to test');
+                return;
+              }
+              testDirectAPI.mutate({
+                videoUrl: firstVideo.videoUrl,
+                comment: 'Test comment from direct API',
+                cookies: firstAccount.cookies || '',
+              });
+            }}
+            disabled={testDirectAPI.isPending || !accounts?.length || !videos?.length}
+          >
+            {testDirectAPI.isPending ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Testing...</>
+            ) : (
+              '🧪 Test Direct API'
+            )}
+          </Button>
+        </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

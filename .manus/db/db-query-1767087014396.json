@@ -1,0 +1,18 @@
+{
+  "query": "SELECT id, status, errorMessage, createdAt, startedAt, completedAt FROM jobs ORDER BY id DESC LIMIT 1",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qmF7zQddKSdTNds.root --database gPPU9FGxZYYEJyDCRUmy73 --execute SELECT id, status, errorMessage, createdAt, startedAt, completedAt FROM jobs ORDER BY id DESC LIMIT 1",
+  "rows": [
+    {
+      "id": "150001",
+      "status": "failed",
+      "errorMessage": "Failed to post comment: HTTP 400: {\"user\":{\"id\":\"_u4l41so\",\"logged_in\":true},\"errors\":[{\"code\":\"400\",\"message\":\"Error number TWO happened: data.message.username: Not recognized\",\"type\":\"generic\"}]}",
+      "createdAt": "2025-12-30 09:29:53",
+      "startedAt": "2025-12-30 09:29:54",
+      "completedAt": "2025-12-30 09:29:55"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tstatus\terrorMessage\tcreatedAt\tstartedAt\tcompletedAt\n150001\tfailed\tFailed to post comment: HTTP 400: {\"user\":{\"id\":\"_u4l41so\",\"logged_in\":true},\"errors\":[{\"code\":\"400\",\"message\":\"Error number TWO happened: data.message.username: Not recognized\",\"type\":\"generic\"}]}\t2025-12-30 09:29:53\t2025-12-30 09:29:54\t2025-12-30 09:29:55\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

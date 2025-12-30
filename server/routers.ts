@@ -26,6 +26,7 @@ import {
   getLogsByUserId,
   getLogsByJobId,
 } from "./db";
+import { postRumbleCommentDirect, extractChatIdFromUrl } from "./automation/directRumbleAPI";
 
 export const appRouter = router({
   system: systemRouter,
@@ -105,11 +106,21 @@ export const appRouter = router({
       videoId: z.string(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      
+      // Extract chat ID for Rumble videos
+      let chatId: string | null = null;
+      if (input.platform === 'rumble') {
+        const { extractChatIdFromPage } = await import('./automation/extractChatId.js');
+        chatId = await extractChatIdFromPage(input.videoUrl);
+        console.log(`[Video Create] Extracted chat ID for ${input.videoUrl}:`, chatId);
+      }
+      
       return createVideo({
         userId: ctx.user.id,
         videoUrl: input.videoUrl,
         platform: input.platform,
         videoId: input.videoId,
+        chatId: chatId || undefined,
       });
     }),
     update: protectedProcedure.input(z.object({
@@ -205,6 +216,30 @@ export const appRouter = router({
     byJob: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       return getLogsByJobId(input.jobId);
+    }),
+  }),
+
+  // Test procedure for direct API debugging
+  test: router({
+    directAPI: protectedProcedure.input(z.object({
+      videoUrl: z.string(),
+      comment: z.string(),
+      cookies: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      
+      const chatId = extractChatIdFromUrl(input.videoUrl);
+      if (!chatId) {
+        throw new Error('Could not extract chat ID from video URL');
+      }
+      
+      const result = await postRumbleCommentDirect(
+        chatId,
+        input.comment,
+        input.cookies
+      );
+      
+      return result;
     }),
   }),
 });

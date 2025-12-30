@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, videoUrl, videoId, chatId FROM videos WHERE videoUrl LIKE '%v73mkg8%'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qmF7zQddKSdTNds.root --database gPPU9FGxZYYEJyDCRUmy73 --execute SELECT id, videoUrl, videoId, chatId FROM videos WHERE videoUrl LIKE '%v73mkg8%'",
+  "rows": [
+    {
+      "id": "90001",
+      "videoUrl": "https://rumble.com/v73mkg8-shakers.html",
+      "videoId": "73mkg8",
+      "chatId": "425684736"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tvideoUrl\tvideoId\tchatId\n90001\thttps://rumble.com/v73mkg8-shakers.html\t73mkg8\t425684736\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

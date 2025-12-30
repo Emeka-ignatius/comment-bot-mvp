@@ -55,6 +55,7 @@ export const videos = mysqlTable("videos", {
   platform: mysqlEnum("platform", ["youtube", "rumble"]).notNull(),
   videoUrl: varchar("videoUrl", { length: 512 }).notNull(),
   videoId: varchar("videoId", { length: 255 }).notNull(),
+  chatId: varchar("chatId", { length: 255 }), // Rumble chat ID (extracted from page)
   title: varchar("title", { length: 512 }),
   status: mysqlEnum("status", ["pending", "in_progress", "completed", "failed"]).default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

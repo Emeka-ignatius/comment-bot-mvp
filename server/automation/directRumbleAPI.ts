@@ -2,6 +2,41 @@ import axios from 'axios';
 import { randomUUID } from 'crypto';
 
 /**
+ * Generate a random username from a predefined list
+ * This helps avoid detection by rotating usernames
+ */
+const USERNAMES = [
+  "FreeVoiceMedia",
+  "UnfilteredMic",
+  "LibertyCaster",
+  "RawSignalTV",
+  "OpenMindStudio",
+  "TruthWave",
+  "RebelBroadcast",
+  "IronOpinion",
+  "SignalOverNoise",
+  "BoldNarrative",
+  "IndependentAngle",
+  "VoxUnchained",
+  "ClearFrameMedia",
+  "StraightTalkerHQ",
+  "RealScopeTV",
+  "PublicSignal",
+  "UntamedMedia",
+  "DirectLineCast",
+  "NoSpinStudio",
+  "FrontierVoice",
+];
+
+let currentUsernameIndex = 0;
+
+function getNextUsername(): string {
+  const username = USERNAMES[currentUsernameIndex];
+  currentUsernameIndex = (currentUsernameIndex + 1) % USERNAMES.length;
+  return username;
+}
+
+/**
  * Post a comment directly to Rumble's undocumented chat API
  * This bypasses browser automation but has medium detection risk
  * Best for low-volume usage (5-10 comments/hour per account)
@@ -14,11 +49,13 @@ export async function postRumbleCommentDirect(
   try {
     const chatUrl = `https://web7.rumble.com/chat/api/chat/${chatId}/message`;
     
+    const username = getNextUsername();
+    
     const payload = {
       data: {
         message: {
           text: comment,
-          // Note: username is NOT included - Rumble uses the cookie's account
+          // username: username, // Temporarily removed - Rumble may infer from cookies
         },
         rant: null,
         request_id: randomUUID(),
@@ -26,7 +63,7 @@ export async function postRumbleCommentDirect(
     };
     
     console.log(`[Rumble Direct API] Posting to: ${chatUrl}`);
-    console.log(`[Rumble Direct API] Comment: ${comment}`);
+    console.log(`[Rumble Direct API] Comment as ${username}: ${comment}`);
     
     const response = await axios.post(chatUrl, payload, {
       headers: {
@@ -34,9 +71,9 @@ export async function postRumbleCommentDirect(
         'Cookie': cookieString,
         'Origin': 'https://rumble.com',
         'Referer': 'https://rumble.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
       },
-      timeout: 10000,
+      timeout: 30000, // 30 second timeout
     });
     
     console.log('[Rumble Direct API] Success:', response.data);

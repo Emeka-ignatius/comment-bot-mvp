@@ -164,10 +164,10 @@ async function executeJob(context: JobExecutionContext) {
       console.log('[JobQueue] Using REAL automation (Direct API)');
       
       if (videoData.platform === 'rumble') {
-        // Extract chat ID from video URL
-        const chatId = extractChatIdFromUrl(videoData.videoUrl);
+        // Use stored chat ID from database
+        const chatId = videoData.chatId;
         if (!chatId) {
-          throw new Error('Could not extract chat ID from video URL');
+          throw new Error('Chat ID not found in database. Please re-add the video to extract chat ID.');
         }
         
         console.log(`[JobQueue] Using Direct Rumble API with chat ID: ${chatId}`);
@@ -197,14 +197,24 @@ async function executeJob(context: JobExecutionContext) {
       await incrementAccountJobStats(accountId, true);
       console.log('[JobQueue] Job completed successfully:', jobId);
     } else {
-      await updateJob(jobId, { status: 'failed', errorMessage: result.message, completedAt: new Date() });
-      await createLog({ userId, jobId, platform: videoData.platform, status: 'failed', message: result.message, errorDetails: result.message });
+      // Truncate error message to prevent database overflow (max 60KB)
+      const truncatedError = result.message.length > 60000 
+        ? result.message.substring(0, 60000) + '... (truncated)'
+        : result.message;
+      
+      await updateJob(jobId, { status: 'failed', errorMessage: truncatedError, completedAt: new Date() });
+      await createLog({ userId, jobId, platform: videoData.platform, status: 'failed', message: truncatedError, errorDetails: truncatedError });
       await incrementAccountJobStats(accountId, false);
-      console.error('[JobQueue] Job failed:', jobId, result.message);
+      console.error('[JobQueue] Job failed:', jobId, truncatedError);
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    let errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[JobQueue] Job execution error:', jobId, errorMessage);
+    
+    // Truncate error message to prevent database overflow (max 60KB)
+    if (errorMessage.length > 60000) {
+      errorMessage = errorMessage.substring(0, 60000) + '... (truncated)';
+    }
 
     await updateJob(jobId, { status: 'failed', errorMessage, completedAt: new Date() });
 

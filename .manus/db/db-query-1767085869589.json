@@ -1,0 +1,47 @@
+{
+  "query": "SELECT id, status, startedAt, completedAt, errorMessage, createdAt FROM jobs ORDER BY createdAt DESC LIMIT 5",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qmF7zQddKSdTNds.root --database gPPU9FGxZYYEJyDCRUmy73 --execute SELECT id, status, startedAt, completedAt, errorMessage, createdAt FROM jobs ORDER BY createdAt DESC LIMIT 5",
+  "rows": [
+    {
+      "id": "120001",
+      "status": "running",
+      "startedAt": "2025-12-30 07:04:28",
+      "completedAt": "NULL",
+      "errorMessage": "NULL",
+      "createdAt": "2025-12-30 07:04:28"
+    },
+    {
+      "id": "90004",
+      "status": "failed",
+      "startedAt": "2025-12-30 01:01:32",
+      "completedAt": "2025-12-30 01:01:36",
+      "errorMessage": "Failed to post comment: Could not find any comment input field. Check screenshot at /tmp/rumble-stealth-debug.png",
+      "createdAt": "2025-12-30 01:01:32"
+    },
+    {
+      "id": "90003",
+      "status": "failed",
+      "startedAt": "2025-12-29 23:46:38",
+      "completedAt": "2025-12-29 23:47:00",
+      "errorMessage": "Failed to post comment: Could not find any comment input field. Check screenshot at /tmp/rumble-debug.png",
+      "createdAt": "2025-12-29 23:46:38"
+    },
+    {
+      "id": "90002",
+      "status": "completed",
+      "startedAt": "2025-12-29 23:40:18",
+      "completedAt": "2025-12-29 23:40:22",
+      "errorMessage": "NULL",
+      "createdAt": "2025-12-29 23:40:17"
+    }
+  ],
+  "messages": [
+    "90001\tfailed\t2025-12-29 23:30:52\t2025-12-29 23:32:22\tFailed to post comment: page.goto: Timeout 90000ms exceeded.",
+    "Call log:",
+    "  - navigating to \"https://rumble.com/v73mkg8-shakers.html\", waiting until \"networkidle\"",
+    "\t2025-12-29 23:30:52"
+  ],
+  "stdout": "id\tstatus\tstartedAt\tcompletedAt\terrorMessage\tcreatedAt\n120001\trunning\t2025-12-30 07:04:28\tNULL\tNULL\t2025-12-30 07:04:28\n90004\tfailed\t2025-12-30 01:01:32\t2025-12-30 01:01:36\tFailed to post comment: Could not find any comment input field. Check screenshot at /tmp/rumble-stealth-debug.png\t2025-12-30 01:01:32\n90003\tfailed\t2025-12-29 23:46:38\t2025-12-29 23:47:00\tFailed to post comment: Could not find any comment input field. Check screenshot at /tmp/rumble-debug.png\t2025-12-29 23:46:38\n90002\tcompleted\t2025-12-29 23:40:18\t2025-12-29 23:40:22\tNULL\t2025-12-29 23:40:17\n90001\tfailed\t2025-12-29 23:30:52\t2025-12-29 23:32:22\tFailed to post comment: page.goto: Timeout 90000ms exceeded.\nCall log:\n  - navigating to \"https://rumble.com/v73mkg8-shakers.html\", waiting until \"networkidle\"\n\t2025-12-29 23:30:52\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}
