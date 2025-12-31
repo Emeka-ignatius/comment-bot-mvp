@@ -35,8 +35,26 @@ export async function initializeLoginSession(platform: 'rumble' | 'youtube'): Pr
 
   try {
     // Launch browser in headless mode
+    // Try to find Chrome in multiple locations
+    const possiblePaths = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      '/home/ubuntu/.cache/puppeteer/chrome/linux-143.0.7499.169/chrome-linux64/chrome',
+      '/root/.cache/puppeteer/chrome/linux-143.0.7499.169/chrome-linux64/chrome',
+    ].filter(Boolean);
+
+    let executablePath: string | undefined;
+    const fs = await import('fs');
+    for (const path of possiblePaths) {
+      if (path && fs.existsSync(path)) {
+        executablePath = path;
+        console.log(`[EmbeddedLogin] Using Chrome at: ${path}`);
+        break;
+      }
+    }
+
     const browser = await puppeteer.launch({
       headless: true,
+      executablePath,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',

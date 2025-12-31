@@ -204,3 +204,12 @@
 - [x] Add new /login-account route for LoginAccount.tsx
 - [x] Update AdminDashboardLayout sidebar to include "Login An Account" link
 - [ ] Test both pages work correctly
+
+## Fix Puppeteer Chrome Path Issue
+- [x] Verify executablePath is set in embeddedLogin.ts
+- [x] Add multi-path Chrome detection
+- [x] Copy Chrome to /root/.cache for server process
+- [x] Force server reload to pick up changes
+- [ ] Test auto-login from UI
+- [ ] Add screenshot capture for login monitoring
+- [ ] Test with visible browser mode
