@@ -213,3 +213,12 @@
 - [ ] Test auto-login from UI
 - [ ] Add screenshot capture for login monitoring
 - [ ] Test with visible browser mode
+
+## Fix Embedded Login Issues
+- [x] Fix Rumble: Stop auto-detecting existing browser cookies
+- [x] Fix Rumble: Open fresh incognito session for login
+- [x] Fix YouTube: URL already correct (accounts.google.com/signin)
+- [x] Fix YouTube: Open fresh incognito session for login
+- [x] Only capture cookies AFTER user explicitly logs in (check for specific cookies)
+- [ ] Test Rumble login with fresh session (READY FOR USER TESTING)
+- [ ] Test YouTube login with fresh session (READY FOR USER TESTING)

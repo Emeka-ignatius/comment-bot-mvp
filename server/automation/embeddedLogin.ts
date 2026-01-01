@@ -34,6 +34,8 @@ export async function initializeLoginSession(platform: 'rumble' | 'youtube'): Pr
   const sessionId = generateSessionId();
 
   try {
+    console.log('[EmbeddedLogin] Initializing login session for:', platform);
+    
     // Launch browser in headless mode
     // Try to find Chrome in multiple locations
     const possiblePaths = [
@@ -42,14 +44,23 @@ export async function initializeLoginSession(platform: 'rumble' | 'youtube'): Pr
       '/root/.cache/puppeteer/chrome/linux-143.0.7499.169/chrome-linux64/chrome',
     ].filter(Boolean);
 
+    console.log('[EmbeddedLogin] Checking Chrome paths:', possiblePaths);
+
     let executablePath: string | undefined;
     const fs = await import('fs');
     for (const path of possiblePaths) {
+      console.log(`[EmbeddedLogin] Checking path: ${path}`);
       if (path && fs.existsSync(path)) {
         executablePath = path;
-        console.log(`[EmbeddedLogin] Using Chrome at: ${path}`);
+        console.log(`[EmbeddedLogin] ✅ Found Chrome at: ${path}`);
         break;
+      } else {
+        console.log(`[EmbeddedLogin] ❌ Not found at: ${path}`);
       }
+    }
+
+    if (!executablePath) {
+      console.error('[EmbeddedLogin] ⚠️  No Chrome executable found in any path!');
     }
 
     const browser = await puppeteer.launch({
@@ -66,7 +77,11 @@ export async function initializeLoginSession(platform: 'rumble' | 'youtube'): Pr
       ],
     });
 
-    const page = await browser.newPage();
+    // Create incognito browser context (fresh session, no existing cookies)
+    const context = await browser.createBrowserContext();
+    const page = await context.newPage();
+    
+    console.log('[EmbeddedLogin] Created fresh incognito browser context');
 
     // Set viewport
     await page.setViewport({ width: 1280, height: 800 });
@@ -136,10 +151,15 @@ async function monitorLoginSession(sessionId: string) {
         const currentUrl = page.url();
 
         // Check if user has logged in successfully
+        // Look for specific cookies that indicate successful login
+        const cookies = await page.cookies();
+        
         const isLoggedIn =
           platform === 'rumble'
-            ? !currentUrl.includes('/account/signin') && currentUrl.includes('rumble.com')
-            : !currentUrl.includes('accounts.google.com/signin') && currentUrl.includes('youtube.com');
+            ? cookies.some(c => c.name === 'rumbles' && c.value.length > 10)
+            : cookies.some(c => (c.name === 'SID' || c.name === 'SSID') && c.value.length > 10);
+        
+        console.log(`[EmbeddedLogin] Login check - URL: ${currentUrl}, Cookies found: ${cookies.length}, Is logged in: ${isLoggedIn}`);
 
         if (isLoggedIn) {
           clearInterval(checkInterval);
