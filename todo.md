@@ -180,14 +180,14 @@
 - [ ] Test Rumble embedded login (READY FOR USER TESTING)
 - [ ] Test YouTube embedded login (READY FOR USER TESTING)
 
-## Browser Extension for Cookie Capture
-- [ ] Create Chrome extension manifest
-- [ ] Implement cookie extraction script
-- [ ] Add API endpoint for receiving cookies from extension
-- [ ] Build extension popup UI
-- [ ] Test extension with Rumble
-- [ ] Test extension with YouTube
-- [ ] Package extension for distribution
+## Cookie Capture Solution (Cookie-Editor Extension)
+- [x] Update CookieInputHelper with Cookie-Editor extension instructions
+- [x] Add support for both Header String and JSON cookie formats
+- [x] Add proper validation for required cookies (a_s, u_s for Rumble)
+- [x] Remove auto-login option from UI (code kept for future use)
+- [x] Simplify account management page
+- [x] Test cookie capture with Cookie-Editor extension (WORKING!)
+- [x] Test job execution with properly captured cookies (WORKING!)
 
 ## AI Auto-Comment System
 - [ ] Integrate audio transcription for live streams
@@ -231,3 +231,19 @@
 - [x] Test with real Rumble login (WORKING!)
 - [ ] Test with real YouTube login
 - [x] Ensure popup closes automatically after cookie capture
+
+## CRITICAL BUG: Chat ID Not Extracting for New Videos
+- [ ] Debug why chat ID extraction isn't working when adding new videos
+- [ ] Check if extractChatIdFromUrl is being called in video creation
+- [ ] Test with user's new live stream URL
+- [ ] Verify chat ID is saved to database
+- [ ] Fix job failures caused by missing chat ID
+
+## Local Development Setup Questions
+- [ ] Document how to get OWNER_OPEN_ID, OWNER_NAME, VITE_APP_ID
+- [ ] Confirm correct values for OAUTH_SERVER_URL, VITE_OAUTH_PORTAL_URL, BUILT_IN_FORGE_API_URL
+- [ ] Explain database setup (Drizzle ORM with PostgreSQL/MySQL)
+- [ ] Document how to pull schema to local machine
+- [ ] Explain VITE_FRONTEND_FORGE_API_KEY and BUILT_IN_FORGE_API_KEY
+- [ ] Document PUPPETEER_EXECUTABLE_PATH setup
+- [ ] Clarify if external backend is needed or if it's all-in-one

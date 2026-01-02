@@ -1,44 +1,19 @@
 import AdminDashboardLayout from '@/components/AdminDashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { trpc } from '@/lib/trpc';
 import { useState } from 'react';
-import { Loader2, Trash2, Plus, AlertTriangle, RefreshCw, CheckCircle } from 'lucide-react';
+import { Loader2, Trash2, AlertTriangle, RefreshCw, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { CookieInputHelper } from '@/components/CookieInputHelper';
-import { EmbeddedLoginDialog } from '@/components/EmbeddedLoginDialog';
 
 export default function LoginAccount() {
   const { data: accounts, isLoading, refetch } = trpc.accounts.list.useQuery();
   const createMutation = trpc.accounts.create.useMutation();
   const deleteMutation = trpc.accounts.delete.useMutation();
 
-  const [formData, setFormData] = useState({
-    platform: 'youtube' as 'youtube' | 'rumble',
-    accountName: '',
-    cookies: '',
-  });
   const [showCookieHelper, setShowCookieHelper] = useState(false);
-  const [showEmbeddedLogin, setShowEmbeddedLogin] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'rumble'>('rumble');
-  const [loginMethod, setLoginMethod] = useState<'embedded' | 'manual'>('embedded');
-
-  const handleCreate = async () => {
-    if (!formData.accountName || !formData.cookies) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    try {
-      await createMutation.mutateAsync(formData);
-      toast.success('Account created successfully');
-      setFormData({ platform: 'youtube', accountName: '', cookies: '' });
-      refetch();
-    } catch (error) {
-      toast.error('Failed to create account');
-    }
-  };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this account?')) return;
@@ -62,65 +37,31 @@ export default function LoginAccount() {
           <h2 className="text-xl font-semibold text-foreground mb-4">Add New Account</h2>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Choose a platform and login method to add your account
+              Select a platform to add your account. You'll need the Cookie-Editor browser extension to export your login cookies.
             </p>
             
-            {/* Login Method Selection */}
-            <div className="flex gap-2 p-2 bg-muted rounded-lg">
-              <Button
-                variant={loginMethod === 'embedded' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setLoginMethod('embedded')}
-                className="flex-1"
-              >
-                🚀 Auto Login (Recommended)
-              </Button>
-              <Button
-                variant={loginMethod === 'manual' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setLoginMethod('manual')}
-                className="flex-1"
-              >
-                📝 Manual Cookie Input
-              </Button>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Button
                 onClick={() => {
                   setSelectedPlatform('rumble');
-                  if (loginMethod === 'embedded') {
-                    setShowEmbeddedLogin(true);
-                  } else {
-                    setShowCookieHelper(true);
-                  }
+                  setShowCookieHelper(true);
                 }}
                 variant="outline"
-                className="h-24 flex flex-col items-center justify-center gap-2"
+                className="h-24 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5"
               >
-                <div className="text-2xl">🎥</div>
+                <div className="text-3xl">🎥</div>
                 <div className="font-semibold">Add Rumble Account</div>
-                <div className="text-xs text-muted-foreground">
-                  {loginMethod === 'embedded' ? 'Auto Login' : 'Manual Input'}
-                </div>
               </Button>
               <Button
                 onClick={() => {
                   setSelectedPlatform('youtube');
-                  if (loginMethod === 'embedded') {
-                    setShowEmbeddedLogin(true);
-                  } else {
-                    setShowCookieHelper(true);
-                  }
+                  setShowCookieHelper(true);
                 }}
                 variant="outline"
-                className="h-24 flex flex-col items-center justify-center gap-2"
+                className="h-24 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5"
               >
-                <div className="text-2xl">▶️</div>
+                <div className="text-3xl">▶️</div>
                 <div className="font-semibold">Add YouTube Account</div>
-                <div className="text-xs text-muted-foreground">
-                  {loginMethod === 'embedded' ? 'Auto Login' : 'Manual Input'}
-                </div>
               </Button>
             </div>
           </div>
@@ -147,27 +88,6 @@ export default function LoginAccount() {
           />
         )}
 
-        {showEmbeddedLogin && (
-          <EmbeddedLoginDialog
-            platform={selectedPlatform}
-            onSuccess={async (cookies, accountName) => {
-              try {
-                await createMutation.mutateAsync({
-                  platform: selectedPlatform,
-                  accountName: accountName || `${selectedPlatform} Account`,
-                  cookies,
-                });
-                toast.success('Account added successfully via auto-login!');
-                refetch();
-                setShowEmbeddedLogin(false);
-              } catch (error) {
-                toast.error('Failed to add account');
-              }
-            }}
-            onCancel={() => setShowEmbeddedLogin(false)}
-          />
-        )}
-
         {/* Accounts List */}
         <Card className="p-6">
           <h2 className="text-xl font-semibold text-foreground mb-4">Your Accounts</h2>
@@ -186,7 +106,7 @@ export default function LoginAccount() {
                 const isExpired = daysUntilExpiry !== null && daysUntilExpiry < 0;
                 
                 return (
-                  <div key={account.id} className="flex items-center justify-between p-4 bg-accent rounded border-l-4" style={{
+                  <div key={account.id} className="flex items-center justify-between p-4 bg-accent rounded-lg border-l-4" style={{
                     borderLeftColor: isExpired ? '#ef4444' : isExpiringSoon ? '#f59e0b' : '#22c55e'
                   }}>
                     <div className="flex-1">
@@ -241,7 +161,7 @@ export default function LoginAccount() {
                       <button
                         onClick={() => handleDelete(account.id)}
                         disabled={deleteMutation.isPending}
-                        className="p-2 hover:bg-destructive rounded text-muted-foreground hover:text-destructive-foreground"
+                        className="p-2 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive transition-colors"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -251,7 +171,12 @@ export default function LoginAccount() {
               })}
             </div>
           ) : (
-            <p className="text-muted-foreground">No accounts yet. Add one to get started.</p>
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">No accounts yet. Add one to get started.</p>
+              <p className="text-sm text-muted-foreground">
+                💡 Tip: You'll need the <strong>Cookie-Editor</strong> browser extension to export your login cookies.
+              </p>
+            </div>
           )}
         </Card>
       </div>
