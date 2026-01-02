@@ -137,6 +137,8 @@ async function monitorLoginSession(sessionId: string) {
   if (!session) return;
 
   const { page, platform } = session;
+  let lastUrl = page.url();
+  let checkCount = 0;
 
   try {
     // Wait for login completion by checking URL changes
@@ -147,28 +149,91 @@ async function monitorLoginSession(sessionId: string) {
         return;
       }
 
+      checkCount++;
       try {
         const currentUrl = page.url();
-
-        // Check if user has logged in successfully
-        // Look for specific cookies that indicate successful login
         const cookies = await page.cookies();
         
-        const isLoggedIn =
-          platform === 'rumble'
-            ? cookies.some(c => c.name === 'rumbles' && c.value.length > 10)
-            : cookies.some(c => (c.name === 'SID' || c.name === 'SSID') && c.value.length > 10);
+        // Log ALL cookie details for debugging
+        console.log(`\n[EmbeddedLogin] === Check #${checkCount} ===`);
+        console.log(`[EmbeddedLogin] Current URL: ${currentUrl}`);
+        console.log(`[EmbeddedLogin] Total cookies: ${cookies.length}`);
         
-        console.log(`[EmbeddedLogin] Login check - URL: ${currentUrl}, Cookies found: ${cookies.length}, Is logged in: ${isLoggedIn}`);
+        if (cookies.length > 0) {
+          console.log('[EmbeddedLogin] Cookie details:');
+          cookies.forEach((c, idx) => {
+            const valuePreview = c.value.substring(0, 50) + (c.value.length > 50 ? '...' : '');
+            console.log(`  [${idx + 1}] ${c.name} = ${valuePreview}`);
+            console.log(`      Domain: ${c.domain}, Path: ${c.path}, Secure: ${c.secure}, HttpOnly: ${c.httpOnly}`);
+          });
+        }
+        
+        // Check for URL change (indicates navigation after login)
+        const urlChanged = currentUrl !== lastUrl;
+        if (urlChanged) {
+          console.log(`[EmbeddedLogin] ✅ URL changed from: ${lastUrl} to: ${currentUrl}`);
+          lastUrl = currentUrl;
+        }
+        
+        // Check for login indicators
+        let isLoggedIn = false;
+        let detectionReason = '';
+        
+        if (platform === 'rumble') {
+          // Strategy: Detect login by combination of cookies + URL change
+          // After successful login, Rumble will:
+          // 1. Set authentication cookies (we don't know exact names)
+          // 2. Redirect away from /signin page
+          
+          // Filter out Cloudflare cookies (they're always present)
+          const nonCloudflareCookies = cookies.filter(c => 
+            !c.name.startsWith('__cf') && 
+            !c.name.startsWith('_cf')
+          );
+          
+          console.log(`[EmbeddedLogin] Non-Cloudflare cookies: ${nonCloudflareCookies.length}`);
+          if (nonCloudflareCookies.length > 0) {
+            console.log(`[EmbeddedLogin] Cookie names: ${nonCloudflareCookies.map(c => c.name).join(', ')}`);
+          }
+          
+          // Check if we have meaningful cookies AND we're not on signin page
+          if (nonCloudflareCookies.length > 0 && !currentUrl.includes('/signin')) {
+            console.log(`[EmbeddedLogin] ✅ Login detected: ${nonCloudflareCookies.length} cookies + not on signin page`);
+            isLoggedIn = true;
+            detectionReason = `${nonCloudflareCookies.length} cookies set, URL: ${currentUrl}`;
+          }
+          
+          // Alternative: Check for specific URL patterns that indicate logged-in state
+          if (!isLoggedIn && (currentUrl.includes('/account') || currentUrl === 'https://rumble.com/')) {
+            if (nonCloudflareCookies.length > 0) {
+              console.log(`[EmbeddedLogin] ✅ Login detected: On logged-in page with cookies`);
+              isLoggedIn = true;
+              detectionReason = `logged-in URL (${currentUrl}) with ${nonCloudflareCookies.length} cookies`;
+            }
+          }
+        } else if (platform === 'youtube') {
+          const authCookies = cookies.filter(c => 
+            (c.name === 'SID' || c.name === 'SSID' || c.name === 'LOGIN_INFO' || c.name === 'NID') && 
+            c.value.length > 10
+          );
+          
+          if (authCookies.length > 0) {
+            isLoggedIn = true;
+            detectionReason = `YouTube auth cookies: ${authCookies.map(c => c.name).join(', ')}`;
+          }
+        }
+        
+        console.log(`[EmbeddedLogin] Login status: ${isLoggedIn ? '✅ LOGGED IN' : '⏳ WAITING'} (${detectionReason || 'no auth indicators'})`);
 
         if (isLoggedIn) {
+          console.log(`[EmbeddedLogin] 🎉 Login detected! Capturing cookies...`);
           clearInterval(checkInterval);
           await captureSessionCookies(sessionId);
         }
       } catch (error) {
         console.error('[EmbeddedLogin] Error checking login status:', error);
       }
-    }, 2000); // Check every 2 seconds
+    }, 1000); // Check every 1 second for faster detection
   } catch (error: any) {
     console.error('[EmbeddedLogin] Error monitoring session:', error);
     session.status = 'error';
@@ -186,6 +251,13 @@ async function captureSessionCookies(sessionId: string) {
   try {
     const cookies = await session.page.cookies();
 
+    console.log(`[EmbeddedLogin] === FINAL COOKIE CAPTURE ===`);
+    console.log(`[EmbeddedLogin] Total cookies to save: ${cookies.length}`);
+    cookies.forEach((c, idx) => {
+      const valuePreview = c.value.substring(0, 50) + (c.value.length > 50 ? '...' : '');
+      console.log(`  [${idx + 1}] ${c.name} = ${valuePreview}`);
+    });
+
     // Format cookies as string (name=value; name2=value2)
     const cookieString = cookies
       .map((cookie) => `${cookie.name}=${cookie.value}`)
@@ -194,7 +266,8 @@ async function captureSessionCookies(sessionId: string) {
     session.cookies = cookieString;
     session.status = 'logged_in';
 
-    console.log(`[EmbeddedLogin] Cookies captured for session ${sessionId}`);
+    console.log(`[EmbeddedLogin] ✅ Cookies captured successfully for session ${sessionId}`);
+    console.log(`[EmbeddedLogin] Cookie string length: ${cookieString.length} characters`);
 
     // Close browser after capturing cookies
     setTimeout(() => {

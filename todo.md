@@ -222,3 +222,12 @@
 - [x] Only capture cookies AFTER user explicitly logs in (check for specific cookies)
 - [ ] Test Rumble login with fresh session (READY FOR USER TESTING)
 - [ ] Test YouTube login with fresh session (READY FOR USER TESTING)
+
+## Fix Puppeteer Cookie Detection
+- [x] Add detailed logging to see all cookies present after login
+- [x] Check for multiple cookie indicators (not just 'rumbles')
+- [x] Reduce monitoring interval for faster detection (1 second)
+- [x] Implement broader detection: any non-Cloudflare cookies + URL change
+- [x] Test with real Rumble login (WORKING!)
+- [ ] Test with real YouTube login
+- [x] Ensure popup closes automatically after cookie capture
