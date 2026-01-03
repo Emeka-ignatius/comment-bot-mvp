@@ -1,7 +1,20 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, InsertAccount, accounts, InsertVideo, videos, InsertCommentTemplate, commentTemplates, InsertJob, jobs, InsertLog, logs } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import {
+  InsertUser,
+  users,
+  InsertAccount,
+  accounts,
+  InsertVideo,
+  videos,
+  InsertCommentTemplate,
+  commentTemplates,
+  InsertJob,
+  jobs,
+  InsertLog,
+  logs,
+} from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -56,12 +69,12 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
+      values.lastSignedIn = new Date().toISOString();
     }
 
     if (Object.keys(updateSet).length === 0) {
@@ -84,7 +97,11 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
@@ -150,13 +167,22 @@ export async function createCommentTemplate(data: InsertCommentTemplate) {
 export async function getCommentTemplatesByUserId(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.select().from(commentTemplates).where(eq(commentTemplates.userId, userId));
+  return db
+    .select()
+    .from(commentTemplates)
+    .where(eq(commentTemplates.userId, userId));
 }
 
-export async function updateCommentTemplate(id: number, data: Partial<InsertCommentTemplate>) {
+export async function updateCommentTemplate(
+  id: number,
+  data: Partial<InsertCommentTemplate>
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.update(commentTemplates).set(data).where(eq(commentTemplates.id, id));
+  return db
+    .update(commentTemplates)
+    .set(data)
+    .where(eq(commentTemplates.id, id));
 }
 
 export async function deleteCommentTemplate(id: number) {
@@ -219,32 +245,43 @@ export async function getLogsByJobId(jobId: number) {
 export async function getAccountHealth(accountId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
-  const result = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
+
+  const result = await db
+    .select()
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1);
   if (result.length === 0) return null;
-  
+
   const account = result[0];
   const now = new Date();
-  
+
   // Calculate health status
-  let healthStatus: 'healthy' | 'warning' | 'critical' = 'healthy';
+  let healthStatus: "healthy" | "warning" | "critical" = "healthy";
   let daysUntilExpiration: number | null = null;
-  
+
   if (account.cookieExpiresAt) {
     const expirationDate = new Date(account.cookieExpiresAt);
-    daysUntilExpiration = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+    daysUntilExpiration = Math.ceil(
+      (expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
     if (daysUntilExpiration <= 0) {
-      healthStatus = 'critical'; // Expired
+      healthStatus = "critical"; // Expired
     } else if (daysUntilExpiration <= 7) {
-      healthStatus = 'warning'; // Expiring soon
+      healthStatus = "warning"; // Expiring soon
     }
   }
-  
-  const successRate = account.totalSuccessfulJobs + account.totalFailedJobs > 0
-    ? Math.round((account.totalSuccessfulJobs / (account.totalSuccessfulJobs + account.totalFailedJobs)) * 100)
-    : 0;
-  
+
+  const successRate =
+    account.totalSuccessfulJobs + account.totalFailedJobs > 0
+      ? Math.round(
+          (account.totalSuccessfulJobs /
+            (account.totalSuccessfulJobs + account.totalFailedJobs)) *
+            100
+        )
+      : 0;
+
   return {
     ...account,
     healthStatus,
@@ -254,31 +291,44 @@ export async function getAccountHealth(accountId: number) {
   };
 }
 
-export async function updateAccountHealth(accountId: number, data: {
-  cookieExpiresAt?: Date;
-  lastSuccessfulSubmission?: Date;
-  totalSuccessfulJobs?: number;
-  totalFailedJobs?: number;
-}) {
+export async function updateAccountHealth(
+  accountId: number,
+  data: {
+    cookieExpiresAt?: Date;
+    lastSuccessfulSubmission?: Date;
+    totalSuccessfulJobs?: number;
+    totalFailedJobs?: number;
+  }
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const updateData: Record<string, any> = {};
   if (data.cookieExpiresAt) updateData.cookieExpiresAt = data.cookieExpiresAt;
-  if (data.lastSuccessfulSubmission) updateData.lastSuccessfulSubmission = data.lastSuccessfulSubmission;
-  if (data.totalSuccessfulJobs !== undefined) updateData.totalSuccessfulJobs = data.totalSuccessfulJobs;
-  if (data.totalFailedJobs !== undefined) updateData.totalFailedJobs = data.totalFailedJobs;
-  
+  if (data.lastSuccessfulSubmission)
+    updateData.lastSuccessfulSubmission = data.lastSuccessfulSubmission;
+  if (data.totalSuccessfulJobs !== undefined)
+    updateData.totalSuccessfulJobs = data.totalSuccessfulJobs;
+  if (data.totalFailedJobs !== undefined)
+    updateData.totalFailedJobs = data.totalFailedJobs;
+
   return db.update(accounts).set(updateData).where(eq(accounts.id, accountId));
 }
 
-export async function incrementAccountJobStats(accountId: number, success: boolean) {
+export async function incrementAccountJobStats(
+  accountId: number,
+  success: boolean
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
-  const account = await db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
+
+  const account = await db
+    .select()
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1);
   if (account.length === 0) throw new Error("Account not found");
-  
+
   const updateData: Record<string, any> = {};
   if (success) {
     updateData.totalSuccessfulJobs = (account[0].totalSuccessfulJobs || 0) + 1;
@@ -286,6 +336,6 @@ export async function incrementAccountJobStats(accountId: number, success: boole
   } else {
     updateData.totalFailedJobs = (account[0].totalFailedJobs || 0) + 1;
   }
-  
+
   return db.update(accounts).set(updateData).where(eq(accounts.id, accountId));
 }

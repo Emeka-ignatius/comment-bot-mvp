@@ -26,8 +26,15 @@ import {
   getLogsByUserId,
   getLogsByJobId,
 } from "./db";
-import { postRumbleCommentDirect, extractChatIdFromUrl } from "./automation/directRumbleAPI";
-import { initializeLoginSession, getSessionStatus, cancelLoginSession } from "./automation/embeddedLogin";
+import {
+  postRumbleCommentDirect,
+  extractChatIdFromUrl,
+} from "./automation/directRumbleAPI";
+import {
+  initializeLoginSession,
+  getSessionStatus,
+  cancelLoginSession,
+} from "./automation/embeddedLogin";
 
 export const appRouter = router({
   system: systemRouter,
@@ -45,239 +52,321 @@ export const appRouter = router({
 
   accounts: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      if (ctx.user.role !== "admin") throw new Error("Admin access required");
       return getAccountsByUserId(ctx.user.id);
     }),
-    create: protectedProcedure.input(z.object({
-      platform: z.enum(['youtube', 'rumble']),
-      accountName: z.string(),
-      cookies: z.string(),
-      cookieExpiresAt: z.date().optional(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      
-      // Auto-calculate cookie expiration if not provided
-      let cookieExpiresAt = input.cookieExpiresAt;
-      if (!cookieExpiresAt) {
-        // Default expiration: 30 days from now
-        // In production, you could parse cookie max-age or expires attributes
-        const expirationDate = new Date();
-        expirationDate.setDate(expirationDate.getDate() + 30);
-        cookieExpiresAt = expirationDate;
-      }
-      
-      return createAccount({
-        userId: ctx.user.id,
-        platform: input.platform,
-        accountName: input.accountName,
-        cookies: input.cookies,
-        cookieExpiresAt,
-      });
-    }),
-    update: protectedProcedure.input(z.object({
-      id: z.number(),
-      platform: z.enum(['youtube', 'rumble']).optional(),
-      accountName: z.string().optional(),
-      cookies: z.string().optional(),
-      isActive: z.number().optional(),
-      cookieExpiresAt: z.date().optional(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      const { id, ...data } = input;
-      return updateAccount(id, data);
-    }),
-    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return deleteAccount(input.id);
-    }),
-    health: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return getAccountHealth(input.id);
-    }),
-    updateHealth: protectedProcedure.input(z.object({
-      id: z.number(),
-      cookieExpiresAt: z.date().optional(),
-      lastSuccessfulSubmission: z.date().optional(),
-      totalSuccessfulJobs: z.number().optional(),
-      totalFailedJobs: z.number().optional(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      const { id, ...data } = input;
-      return updateAccountHealth(id, data);
-    }),
+    create: protectedProcedure
+      .input(
+        z.object({
+          platform: z.enum(["youtube", "rumble"]),
+          accountName: z.string(),
+          cookies: z.string(),
+          cookieExpiresAt: z.date().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+
+        // Auto-calculate cookie expiration if not provided
+        let cookieExpiresAt = input.cookieExpiresAt;
+        if (!cookieExpiresAt) {
+          // Default expiration: 30 days from now
+          // In production, you could parse cookie max-age or expires attributes
+          const expirationDate = new Date();
+          expirationDate.setDate(expirationDate.getDate() + 30);
+          cookieExpiresAt = expirationDate;
+        }
+
+        return createAccount({
+          userId: ctx.user.id,
+          platform: input.platform,
+          accountName: input.accountName,
+          cookies: input.cookies,
+          cookieExpiresAt: cookieExpiresAt.toISOString(),
+        });
+      }),
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          platform: z.enum(["youtube", "rumble"]).optional(),
+          accountName: z.string().optional(),
+          cookies: z.string().optional(),
+          isActive: z.number().optional(),
+          cookieExpiresAt: z.date().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        const { id, ...data } = input;
+        const payload: any = { ...data };
+        if (payload.cookieExpiresAt instanceof Date) {
+          payload.cookieExpiresAt = payload.cookieExpiresAt.toISOString();
+        }
+        return updateAccount(id, payload);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return deleteAccount(input.id);
+      }),
+    health: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return getAccountHealth(input.id);
+      }),
+    updateHealth: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          cookieExpiresAt: z.date().optional(),
+          lastSuccessfulSubmission: z.date().optional(),
+          totalSuccessfulJobs: z.number().optional(),
+          totalFailedJobs: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        const { id, ...data } = input;
+        return updateAccountHealth(id, data);
+      }),
   }),
 
   videos: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      if (ctx.user.role !== "admin") throw new Error("Admin access required");
       return getVideosByUserId(ctx.user.id);
     }),
-    create: protectedProcedure.input(z.object({
-      videoUrl: z.string(),
-      platform: z.enum(['youtube', 'rumble']),
-      videoId: z.string(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      
-      // Extract chat ID for Rumble videos
-      let chatId: string | null = null;
-      if (input.platform === 'rumble') {
-        const { extractChatIdFromPage } = await import('./automation/extractChatId.js');
-        chatId = await extractChatIdFromPage(input.videoUrl);
-        console.log(`[Video Create] Extracted chat ID for ${input.videoUrl}:`, chatId);
-      }
-      
-      return createVideo({
-        userId: ctx.user.id,
-        videoUrl: input.videoUrl,
-        platform: input.platform,
-        videoId: input.videoId,
-        chatId: chatId || undefined,
-      });
-    }),
-    update: protectedProcedure.input(z.object({
-      id: z.number(),
-      videoUrl: z.string().optional(),
-      platform: z.enum(['youtube', 'rumble']).optional(),
-      videoId: z.string().optional(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      const { id, ...data } = input;
-      return updateVideo(id, data);
-    }),
-    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return deleteVideo(input.id);
-    }),
+    create: protectedProcedure
+      .input(
+        z.object({
+          videoUrl: z.string(),
+          platform: z.enum(["youtube", "rumble"]),
+          videoId: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+
+        // Extract chat ID for Rumble videos
+        let chatId: string | null = null;
+        if (input.platform === "rumble") {
+          const { extractChatIdFromPage } = await import(
+            "./automation/extractChatId.js"
+          );
+          chatId = await extractChatIdFromPage(input.videoUrl);
+          console.log(
+            `[Video Create] Extracted chat ID for ${input.videoUrl}:`,
+            chatId
+          );
+        }
+
+        return createVideo({
+          userId: ctx.user.id,
+          videoUrl: input.videoUrl,
+          platform: input.platform,
+          videoId: input.videoId,
+          chatId: chatId || undefined,
+        });
+      }),
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          videoUrl: z.string().optional(),
+          platform: z.enum(["youtube", "rumble"]).optional(),
+          videoId: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        const { id, ...data } = input;
+        return updateVideo(id, data);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return deleteVideo(input.id);
+      }),
   }),
 
   comments: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      if (ctx.user.role !== "admin") throw new Error("Admin access required");
       return getCommentTemplatesByUserId(ctx.user.id);
     }),
-    create: protectedProcedure.input(z.object({
-      name: z.string(),
-      content: z.string(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return createCommentTemplate({
-        userId: ctx.user.id,
-        name: input.name,
-        content: input.content,
-      });
-    }),
-    update: protectedProcedure.input(z.object({
-      id: z.number(),
-      name: z.string().optional(),
-      content: z.string().optional(),
-      isActive: z.number().optional(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      const { id, ...data } = input;
-      return updateCommentTemplate(id, data);
-    }),
-    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return deleteCommentTemplate(input.id);
-    }),
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string(),
+          content: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return createCommentTemplate({
+          userId: ctx.user.id,
+          name: input.name,
+          content: input.content,
+        });
+      }),
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          name: z.string().optional(),
+          content: z.string().optional(),
+          isActive: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        const { id, ...data } = input;
+        return updateCommentTemplate(id, data);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return deleteCommentTemplate(input.id);
+      }),
   }),
 
   jobs: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      if (ctx.user.role !== "admin") throw new Error("Admin access required");
       return getJobsByUserId(ctx.user.id);
     }),
-    create: protectedProcedure.input(z.object({
-      videoId: z.number(),
-      accountId: z.number(),
-      commentTemplateId: z.number(),
-      scheduledAt: z.date().optional(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return createJob({
-        userId: ctx.user.id,
-        videoId: input.videoId,
-        accountId: input.accountId,
-        commentTemplateId: input.commentTemplateId,
-        scheduledAt: input.scheduledAt,
-      });
-    }),
-    update: protectedProcedure.input(z.object({
-      id: z.number(),
-      status: z.enum(['pending', 'running', 'completed', 'failed']).optional(),
-      errorMessage: z.string().optional(),
-      startedAt: z.date().optional(),
-      completedAt: z.date().optional(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      const { id, ...data } = input;
-      return updateJob(id, data);
-    }),
-    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return deleteJob(input.id);
-    }),
+    create: protectedProcedure
+      .input(
+        z.object({
+          videoId: z.number(),
+          accountId: z.number(),
+          commentTemplateId: z.number(),
+          scheduledAt: z.date().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return createJob({
+          userId: ctx.user.id,
+          videoId: input.videoId,
+          accountId: input.accountId,
+          commentTemplateId: input.commentTemplateId,
+          scheduledAt: input.scheduledAt?.toISOString(),
+        });
+      }),
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          status: z
+            .enum(["pending", "running", "completed", "failed"])
+            .optional(),
+          errorMessage: z.string().optional(),
+          startedAt: z.date().optional(),
+          completedAt: z.date().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        const { id, ...data } = input;
+        const payload: any = { ...data };
+        if (payload.startedAt instanceof Date) {
+          payload.startedAt = payload.startedAt.toISOString();
+        }
+        if (payload.completedAt instanceof Date) {
+          payload.completedAt = payload.completedAt.toISOString();
+        }
+        return updateJob(id, payload);
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return deleteJob(input.id);
+      }),
   }),
 
   logs: router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      if (ctx.user.role !== "admin") throw new Error("Admin access required");
       return getLogsByUserId(ctx.user.id);
     }),
-    byJob: protectedProcedure.input(z.object({ jobId: z.number() })).query(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return getLogsByJobId(input.jobId);
-    }),
+    byJob: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return getLogsByJobId(input.jobId);
+      }),
   }),
 
   // Test procedure for direct API debugging
   test: router({
-    directAPI: protectedProcedure.input(z.object({
-      videoUrl: z.string(),
-      comment: z.string(),
-      cookies: z.string(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      
-      const chatId = extractChatIdFromUrl(input.videoUrl);
-      if (!chatId) {
-        throw new Error('Could not extract chat ID from video URL');
-      }
-      
-      const result = await postRumbleCommentDirect(
-        chatId,
-        input.comment,
-        input.cookies
-      );
-      
-      return result;
-    }),
+    directAPI: protectedProcedure
+      .input(
+        z.object({
+          videoUrl: z.string(),
+          comment: z.string(),
+          cookies: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+
+        const chatId = extractChatIdFromUrl(input.videoUrl);
+        if (!chatId) {
+          throw new Error("Could not extract chat ID from video URL");
+        }
+
+        const result = await postRumbleCommentDirect(
+          chatId,
+          input.comment,
+          input.cookies
+        );
+
+        return result;
+      }),
   }),
-  
+
   // Embedded login procedures
   embeddedLogin: router({
-    initiate: protectedProcedure.input(z.object({
-      platform: z.enum(['rumble', 'youtube']),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return await initializeLoginSession(input.platform);
-    }),
-    
-    status: protectedProcedure.input(z.object({
-      sessionId: z.string(),
-    })).query(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      return getSessionStatus(input.sessionId);
-    }),
-    
-    cancel: protectedProcedure.input(z.object({
-      sessionId: z.string(),
-    })).mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
-      await cancelLoginSession(input.sessionId);
-      return { success: true };
-    }),
+    initiate: protectedProcedure
+      .input(
+        z.object({
+          platform: z.enum(["rumble", "youtube"]),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return await initializeLoginSession(input.platform);
+      }),
+
+    status: protectedProcedure
+      .input(
+        z.object({
+          sessionId: z.string(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        return getSessionStatus(input.sessionId);
+      }),
+
+    cancel: protectedProcedure
+      .input(
+        z.object({
+          sessionId: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+        await cancelLoginSession(input.sessionId);
+        return { success: true };
+      }),
   }),
 });
 

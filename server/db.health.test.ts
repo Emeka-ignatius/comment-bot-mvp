@@ -14,25 +14,27 @@ describe("Account Health Monitoring", () => {
         lastSuccessfulSubmission: null,
         totalSuccessfulJobs: 5,
         totalFailedJobs: 0,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
 
       const now = new Date();
-      let healthStatus: 'healthy' | 'warning' | 'critical' = 'healthy';
+      let healthStatus: "healthy" | "warning" | "critical" = "healthy";
       let daysUntilExpiration: number | null = null;
 
       if (account.cookieExpiresAt) {
         const expirationDate = new Date(account.cookieExpiresAt);
-        daysUntilExpiration = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        daysUntilExpiration = Math.ceil(
+          (expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
         if (daysUntilExpiration <= 0) {
-          healthStatus = 'critical';
+          healthStatus = "critical";
         } else if (daysUntilExpiration <= 7) {
-          healthStatus = 'warning';
+          healthStatus = "warning";
         }
       }
 
-      expect(healthStatus).toBe('healthy');
+      expect(healthStatus).toBe("healthy");
       expect(daysUntilExpiration).toBeNull();
     });
 
@@ -40,19 +42,21 @@ describe("Account Health Monitoring", () => {
       const now = new Date();
       const expiredDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 1 day ago
 
-      let healthStatus: 'healthy' | 'warning' | 'critical' = 'healthy';
+      let healthStatus: "healthy" | "warning" | "critical" = "healthy";
       let daysUntilExpiration: number | null = null;
 
       if (expiredDate) {
-        daysUntilExpiration = Math.ceil((expiredDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        daysUntilExpiration = Math.ceil(
+          (expiredDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
         if (daysUntilExpiration <= 0) {
-          healthStatus = 'critical';
+          healthStatus = "critical";
         } else if (daysUntilExpiration <= 7) {
-          healthStatus = 'warning';
+          healthStatus = "warning";
         }
       }
 
-      expect(healthStatus).toBe('critical');
+      expect(healthStatus).toBe("critical");
       expect(daysUntilExpiration).toBeLessThanOrEqual(0);
     });
 
@@ -60,19 +64,21 @@ describe("Account Health Monitoring", () => {
       const now = new Date();
       const expiringDate = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 days from now
 
-      let healthStatus: 'healthy' | 'warning' | 'critical' = 'healthy';
+      let healthStatus: "healthy" | "warning" | "critical" = "healthy";
       let daysUntilExpiration: number | null = null;
 
       if (expiringDate) {
-        daysUntilExpiration = Math.ceil((expiringDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        daysUntilExpiration = Math.ceil(
+          (expiringDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
         if (daysUntilExpiration <= 0) {
-          healthStatus = 'critical';
+          healthStatus = "critical";
         } else if (daysUntilExpiration <= 7) {
-          healthStatus = 'warning';
+          healthStatus = "warning";
         }
       }
 
-      expect(healthStatus).toBe('warning');
+      expect(healthStatus).toBe("warning");
       expect(daysUntilExpiration).toBe(3);
     });
 
@@ -80,19 +86,21 @@ describe("Account Health Monitoring", () => {
       const now = new Date();
       const healthyDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
 
-      let healthStatus: 'healthy' | 'warning' | 'critical' = 'healthy';
+      let healthStatus: "healthy" | "warning" | "critical" = "healthy";
       let daysUntilExpiration: number | null = null;
 
       if (healthyDate) {
-        daysUntilExpiration = Math.ceil((healthyDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        daysUntilExpiration = Math.ceil(
+          (healthyDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
         if (daysUntilExpiration <= 0) {
-          healthStatus = 'critical';
+          healthStatus = "critical";
         } else if (daysUntilExpiration <= 7) {
-          healthStatus = 'warning';
+          healthStatus = "warning";
         }
       }
 
-      expect(healthStatus).toBe('healthy');
+      expect(healthStatus).toBe("healthy");
       expect(daysUntilExpiration).toBe(30);
     });
   });
@@ -113,7 +121,8 @@ describe("Account Health Monitoring", () => {
       const totalFailed = 0;
       const totalJobs = totalSuccessful + totalFailed;
 
-      const successRate = totalJobs > 0 ? Math.round((totalSuccessful / totalJobs) * 100) : 0;
+      const successRate =
+        totalJobs > 0 ? Math.round((totalSuccessful / totalJobs) * 100) : 0;
 
       expect(successRate).toBe(0);
     });

@@ -1,11 +1,11 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer, { Browser, Page } from "puppeteer";
 
 interface LoginSession {
   sessionId: string;
-  platform: 'rumble' | 'youtube';
+  platform: "rumble" | "youtube";
   browser: Browser;
   page: Page;
-  status: 'waiting' | 'logged_in' | 'error' | 'timeout';
+  status: "waiting" | "logged_in" | "error" | "timeout";
   cookies: string | null;
   error: string | null;
   createdAt: Date;
@@ -27,27 +27,27 @@ function generateSessionId(): string {
 /**
  * Initialize a new login session
  */
-export async function initializeLoginSession(platform: 'rumble' | 'youtube'): Promise<{
+export async function initializeLoginSession(
+  platform: "rumble" | "youtube"
+): Promise<{
   sessionId: string;
   loginUrl: string;
 }> {
   const sessionId = generateSessionId();
 
   try {
-    console.log('[EmbeddedLogin] Initializing login session for:', platform);
-    
+    console.log("[EmbeddedLogin] Initializing login session for:", platform);
+
     // Launch browser in headless mode
     // Try to find Chrome in multiple locations
-    const possiblePaths = [
-      process.env.PUPPETEER_EXECUTABLE_PATH,
-      '/home/ubuntu/.cache/puppeteer/chrome/linux-143.0.7499.169/chrome-linux64/chrome',
-      '/root/.cache/puppeteer/chrome/linux-143.0.7499.169/chrome-linux64/chrome',
-    ].filter(Boolean);
+    const possiblePaths = [process.env.PUPPETEER_EXECUTABLE_PATH].filter(
+      Boolean
+    );
 
-    console.log('[EmbeddedLogin] Checking Chrome paths:', possiblePaths);
+    console.log("[EmbeddedLogin] Checking Chrome paths:", possiblePaths);
 
     let executablePath: string | undefined;
-    const fs = await import('fs');
+    const fs = await import("fs");
     for (const path of possiblePaths) {
       console.log(`[EmbeddedLogin] Checking path: ${path}`);
       if (path && fs.existsSync(path)) {
@@ -60,45 +60,47 @@ export async function initializeLoginSession(platform: 'rumble' | 'youtube'): Pr
     }
 
     if (!executablePath) {
-      console.error('[EmbeddedLogin] ⚠️  No Chrome executable found in any path!');
+      console.error(
+        "[EmbeddedLogin] ⚠️  No Chrome executable found in any path!"
+      );
     }
 
     const browser = await puppeteer.launch({
       headless: true,
       executablePath,
       args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--disable-gpu",
       ],
     });
 
     // Create incognito browser context (fresh session, no existing cookies)
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
-    
-    console.log('[EmbeddedLogin] Created fresh incognito browser context');
+
+    console.log("[EmbeddedLogin] Created fresh incognito browser context");
 
     // Set viewport
     await page.setViewport({ width: 1280, height: 800 });
 
     // Set user agent
     await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
     // Navigate to login page
     const loginUrls = {
-      rumble: 'https://rumble.com/account/signin',
-      youtube: 'https://accounts.google.com/signin',
+      rumble: "https://rumble.com/account/signin",
+      youtube: "https://accounts.google.com/signin",
     };
 
     const loginUrl = loginUrls[platform];
-    await page.goto(loginUrl, { waitUntil: 'networkidle2' });
+    await page.goto(loginUrl, { waitUntil: "networkidle2" });
 
     // Create session
     const session: LoginSession = {
@@ -106,7 +108,7 @@ export async function initializeLoginSession(platform: 'rumble' | 'youtube'): Pr
       platform,
       browser,
       page,
-      status: 'waiting',
+      status: "waiting",
       cookies: null,
       error: null,
       createdAt: new Date(),
@@ -119,12 +121,12 @@ export async function initializeLoginSession(platform: 'rumble' | 'youtube'): Pr
 
     // Set timeout to cleanup session
     setTimeout(() => {
-      cleanupSession(sessionId, 'timeout');
+      cleanupSession(sessionId, "timeout");
     }, SESSION_TIMEOUT_MS);
 
     return { sessionId, loginUrl };
   } catch (error: any) {
-    console.error('[EmbeddedLogin] Failed to initialize session:', error);
+    console.error("[EmbeddedLogin] Failed to initialize session:", error);
     throw new Error(`Failed to initialize login session: ${error.message}`);
   }
 }
@@ -144,7 +146,7 @@ async function monitorLoginSession(sessionId: string) {
     // Wait for login completion by checking URL changes
     const checkInterval = setInterval(async () => {
       const currentSession = activeSessions.get(sessionId);
-      if (!currentSession || currentSession.status !== 'waiting') {
+      if (!currentSession || currentSession.status !== "waiting") {
         clearInterval(checkInterval);
         return;
       }
@@ -153,90 +155,117 @@ async function monitorLoginSession(sessionId: string) {
       try {
         const currentUrl = page.url();
         const cookies = await page.cookies();
-        
+
         // Log ALL cookie details for debugging
         console.log(`\n[EmbeddedLogin] === Check #${checkCount} ===`);
         console.log(`[EmbeddedLogin] Current URL: ${currentUrl}`);
         console.log(`[EmbeddedLogin] Total cookies: ${cookies.length}`);
-        
+
         if (cookies.length > 0) {
-          console.log('[EmbeddedLogin] Cookie details:');
+          console.log("[EmbeddedLogin] Cookie details:");
           cookies.forEach((c, idx) => {
-            const valuePreview = c.value.substring(0, 50) + (c.value.length > 50 ? '...' : '');
+            const valuePreview =
+              c.value.substring(0, 50) + (c.value.length > 50 ? "..." : "");
             console.log(`  [${idx + 1}] ${c.name} = ${valuePreview}`);
-            console.log(`      Domain: ${c.domain}, Path: ${c.path}, Secure: ${c.secure}, HttpOnly: ${c.httpOnly}`);
+            console.log(
+              `      Domain: ${c.domain}, Path: ${c.path}, Secure: ${c.secure}, HttpOnly: ${c.httpOnly}`
+            );
           });
         }
-        
+
         // Check for URL change (indicates navigation after login)
         const urlChanged = currentUrl !== lastUrl;
         if (urlChanged) {
-          console.log(`[EmbeddedLogin] ✅ URL changed from: ${lastUrl} to: ${currentUrl}`);
+          console.log(
+            `[EmbeddedLogin] ✅ URL changed from: ${lastUrl} to: ${currentUrl}`
+          );
           lastUrl = currentUrl;
         }
-        
+
         // Check for login indicators
         let isLoggedIn = false;
-        let detectionReason = '';
-        
-        if (platform === 'rumble') {
+        let detectionReason = "";
+
+        if (platform === "rumble") {
           // Strategy: Detect login by combination of cookies + URL change
           // After successful login, Rumble will:
           // 1. Set authentication cookies (we don't know exact names)
           // 2. Redirect away from /signin page
-          
+
           // Filter out Cloudflare cookies (they're always present)
-          const nonCloudflareCookies = cookies.filter(c => 
-            !c.name.startsWith('__cf') && 
-            !c.name.startsWith('_cf')
+          const nonCloudflareCookies = cookies.filter(
+            c => !c.name.startsWith("__cf") && !c.name.startsWith("_cf")
           );
-          
-          console.log(`[EmbeddedLogin] Non-Cloudflare cookies: ${nonCloudflareCookies.length}`);
+
+          console.log(
+            `[EmbeddedLogin] Non-Cloudflare cookies: ${nonCloudflareCookies.length}`
+          );
           if (nonCloudflareCookies.length > 0) {
-            console.log(`[EmbeddedLogin] Cookie names: ${nonCloudflareCookies.map(c => c.name).join(', ')}`);
+            console.log(
+              `[EmbeddedLogin] Cookie names: ${nonCloudflareCookies.map(c => c.name).join(", ")}`
+            );
           }
-          
+
           // Check if we have meaningful cookies AND we're not on signin page
-          if (nonCloudflareCookies.length > 0 && !currentUrl.includes('/signin')) {
-            console.log(`[EmbeddedLogin] ✅ Login detected: ${nonCloudflareCookies.length} cookies + not on signin page`);
+          if (
+            nonCloudflareCookies.length > 0 &&
+            !currentUrl.includes("/signin")
+          ) {
+            console.log(
+              `[EmbeddedLogin] ✅ Login detected: ${nonCloudflareCookies.length} cookies + not on signin page`
+            );
             isLoggedIn = true;
             detectionReason = `${nonCloudflareCookies.length} cookies set, URL: ${currentUrl}`;
           }
-          
+
           // Alternative: Check for specific URL patterns that indicate logged-in state
-          if (!isLoggedIn && (currentUrl.includes('/account') || currentUrl === 'https://rumble.com/')) {
+          if (
+            !isLoggedIn &&
+            (currentUrl.includes("/account") ||
+              currentUrl === "https://rumble.com/")
+          ) {
             if (nonCloudflareCookies.length > 0) {
-              console.log(`[EmbeddedLogin] ✅ Login detected: On logged-in page with cookies`);
+              console.log(
+                `[EmbeddedLogin] ✅ Login detected: On logged-in page with cookies`
+              );
               isLoggedIn = true;
               detectionReason = `logged-in URL (${currentUrl}) with ${nonCloudflareCookies.length} cookies`;
             }
           }
-        } else if (platform === 'youtube') {
-          const authCookies = cookies.filter(c => 
-            (c.name === 'SID' || c.name === 'SSID' || c.name === 'LOGIN_INFO' || c.name === 'NID') && 
-            c.value.length > 10
+        } else if (platform === "youtube") {
+          const authCookies = cookies.filter(
+            c =>
+              (c.name === "SID" ||
+                c.name === "SSID" ||
+                c.name === "LOGIN_INFO" ||
+                c.name === "NID") &&
+              c.value.length > 10
           );
-          
+
           if (authCookies.length > 0) {
             isLoggedIn = true;
-            detectionReason = `YouTube auth cookies: ${authCookies.map(c => c.name).join(', ')}`;
+            detectionReason = `YouTube auth cookies: ${authCookies.map(c => c.name).join(", ")}`;
           }
         }
-        
-        console.log(`[EmbeddedLogin] Login status: ${isLoggedIn ? '✅ LOGGED IN' : '⏳ WAITING'} (${detectionReason || 'no auth indicators'})`);
+
+        console.log(
+          `[EmbeddedLogin] Login status: ${isLoggedIn ? "✅ LOGGED IN" : "⏳ WAITING"} (${detectionReason || "no auth indicators"})`
+        );
 
         if (isLoggedIn) {
-          console.log(`[EmbeddedLogin] 🎉 Login detected! Capturing cookies...`);
+          console.log(
+            `[EmbeddedLogin] 🎉 Login detected! Capturing cookies...`
+          );
           clearInterval(checkInterval);
           await captureSessionCookies(sessionId);
         }
       } catch (error) {
-        console.error('[EmbeddedLogin] Error checking login status:', error);
+        console.error("[EmbeddedLogin] Error checking login status:", error);
       }
     }, 1000); // Check every 1 second for faster detection
   } catch (error: any) {
-    console.error('[EmbeddedLogin] Error monitoring session:', error);
-    session.status = 'error';
+    console.error("[EmbeddedLogin] Error monitoring session:", error);
+    session.status = "error";
     session.error = error.message;
   }
 }
@@ -254,28 +283,33 @@ async function captureSessionCookies(sessionId: string) {
     console.log(`[EmbeddedLogin] === FINAL COOKIE CAPTURE ===`);
     console.log(`[EmbeddedLogin] Total cookies to save: ${cookies.length}`);
     cookies.forEach((c, idx) => {
-      const valuePreview = c.value.substring(0, 50) + (c.value.length > 50 ? '...' : '');
+      const valuePreview =
+        c.value.substring(0, 50) + (c.value.length > 50 ? "..." : "");
       console.log(`  [${idx + 1}] ${c.name} = ${valuePreview}`);
     });
 
     // Format cookies as string (name=value; name2=value2)
     const cookieString = cookies
-      .map((cookie) => `${cookie.name}=${cookie.value}`)
-      .join('; ');
+      .map(cookie => `${cookie.name}=${cookie.value}`)
+      .join("; ");
 
     session.cookies = cookieString;
-    session.status = 'logged_in';
+    session.status = "logged_in";
 
-    console.log(`[EmbeddedLogin] ✅ Cookies captured successfully for session ${sessionId}`);
-    console.log(`[EmbeddedLogin] Cookie string length: ${cookieString.length} characters`);
+    console.log(
+      `[EmbeddedLogin] ✅ Cookies captured successfully for session ${sessionId}`
+    );
+    console.log(
+      `[EmbeddedLogin] Cookie string length: ${cookieString.length} characters`
+    );
 
     // Close browser after capturing cookies
     setTimeout(() => {
-      cleanupSession(sessionId, 'success');
+      cleanupSession(sessionId, "success");
     }, 2000);
   } catch (error: any) {
-    console.error('[EmbeddedLogin] Error capturing cookies:', error);
-    session.status = 'error';
+    console.error("[EmbeddedLogin] Error capturing cookies:", error);
+    session.status = "error";
     session.error = error.message;
   }
 }
@@ -284,14 +318,14 @@ async function captureSessionCookies(sessionId: string) {
  * Get session status
  */
 export function getSessionStatus(sessionId: string): {
-  status: 'waiting' | 'logged_in' | 'error' | 'timeout' | 'not_found';
+  status: "waiting" | "logged_in" | "error" | "timeout" | "not_found";
   cookies: string | null;
   error: string | null;
 } {
   const session = activeSessions.get(sessionId);
 
   if (!session) {
-    return { status: 'not_found', cookies: null, error: 'Session not found' };
+    return { status: "not_found", cookies: null, error: "Session not found" };
   }
 
   return {
@@ -304,19 +338,22 @@ export function getSessionStatus(sessionId: string): {
 /**
  * Cleanup session
  */
-async function cleanupSession(sessionId: string, reason: 'success' | 'timeout' | 'error') {
+async function cleanupSession(
+  sessionId: string,
+  reason: "success" | "timeout" | "error"
+) {
   const session = activeSessions.get(sessionId);
   if (!session) return;
 
   try {
     await session.browser.close();
   } catch (error) {
-    console.error('[EmbeddedLogin] Error closing browser:', error);
+    console.error("[EmbeddedLogin] Error closing browser:", error);
   }
 
-  if (reason === 'timeout' && session.status === 'waiting') {
-    session.status = 'timeout';
-    session.error = 'Login session timed out';
+  if (reason === "timeout" && session.status === "waiting") {
+    session.status = "timeout";
+    session.error = "Login session timed out";
   }
 
   // Keep session in memory for 1 minute for status retrieval
@@ -331,7 +368,7 @@ async function cleanupSession(sessionId: string, reason: 'success' | 'timeout' |
  * Cancel a login session
  */
 export async function cancelLoginSession(sessionId: string): Promise<void> {
-  await cleanupSession(sessionId, 'error');
+  await cleanupSession(sessionId, "error");
 }
 
 /**
@@ -342,9 +379,9 @@ export async function getSessionScreenshot(sessionId: string): Promise<any> {
   if (!session) return null;
 
   try {
-    return await session.page.screenshot({ type: 'png' });
+    return await session.page.screenshot({ type: "png" });
   } catch (error) {
-    console.error('[EmbeddedLogin] Error taking screenshot:', error);
+    console.error("[EmbeddedLogin] Error taking screenshot:", error);
     return null;
   }
 }

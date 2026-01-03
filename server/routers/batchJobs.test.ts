@@ -12,9 +12,9 @@ function createAdminContext(): TrpcContext {
     name: "Admin User",
     loginMethod: "manus",
     role: "admin",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastSignedIn: new Date().toISOString(),
   };
 
   const ctx: TrpcContext = {
@@ -25,7 +25,7 @@ function createAdminContext(): TrpcContext {
     } as TrpcContext["req"],
     res: {
       clearCookie: () => {},
-    } as TrpcContext["res"],
+    } as unknown as TrpcContext["res"],
   };
 
   return ctx;
@@ -39,9 +39,9 @@ function createUserContext(): TrpcContext {
     name: "Regular User",
     loginMethod: "manus",
     role: "user",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastSignedIn: new Date().toISOString(),
   };
 
   const ctx: TrpcContext = {
@@ -52,7 +52,7 @@ function createUserContext(): TrpcContext {
     } as TrpcContext["req"],
     res: {
       clearCookie: () => {},
-    } as TrpcContext["res"],
+    } as unknown as TrpcContext["res"],
   };
 
   return ctx;
