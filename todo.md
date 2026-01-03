@@ -247,3 +247,15 @@
 - [ ] Explain VITE_FRONTEND_FORGE_API_KEY and BUILT_IN_FORGE_API_KEY
 - [ ] Document PUPPETEER_EXECUTABLE_PATH setup
 - [ ] Clarify if external backend is needed or if it's all-in-one
+
+## Account Edit Feature
+- [x] Add update procedure for accounts (update name and/or cookies)
+- [x] Add Edit button to account list UI
+- [x] Create edit modal/dialog for updating account details
+- [x] Add cookie refresh functionality without re-adding account
+- [x] Test account editing (5 vitest tests passing)
+
+## Bug Fix: Video Title Not Saving
+- [x] Debug video creation to find why title isn't saving
+- [x] Fix title field in video creation procedure
+- [ ] Test video title saves correctly

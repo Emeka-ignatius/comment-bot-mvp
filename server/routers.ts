@@ -116,6 +116,7 @@ export const appRouter = router({
       videoUrl: z.string(),
       platform: z.enum(['youtube', 'rumble']),
       videoId: z.string(),
+      title: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       
@@ -154,6 +155,7 @@ export const appRouter = router({
         platform: input.platform,
         videoId: input.videoId,
         chatId: chatId || undefined,
+        title: input.title,
       });
     }),
     update: protectedProcedure.input(z.object({
@@ -161,6 +163,8 @@ export const appRouter = router({
       videoUrl: z.string().optional(),
       platform: z.enum(['youtube', 'rumble']).optional(),
       videoId: z.string().optional(),
+      title: z.string().optional(),
+      status: z.enum(['pending', 'in_progress', 'completed', 'failed']).optional(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       const { id, ...data } = input;

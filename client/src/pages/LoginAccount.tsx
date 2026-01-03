@@ -1,19 +1,36 @@
 import AdminDashboardLayout from '@/components/AdminDashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { trpc } from '@/lib/trpc';
 import { useState } from 'react';
-import { Loader2, Trash2, AlertTriangle, RefreshCw, CheckCircle } from 'lucide-react';
+import { Loader2, Trash2, AlertTriangle, RefreshCw, CheckCircle, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { CookieInputHelper } from '@/components/CookieInputHelper';
+
+interface EditAccountData {
+  id: number;
+  accountName: string;
+  cookies: string;
+  platform: 'youtube' | 'rumble';
+}
 
 export default function LoginAccount() {
   const { data: accounts, isLoading, refetch } = trpc.accounts.list.useQuery();
   const createMutation = trpc.accounts.create.useMutation();
+  const updateMutation = trpc.accounts.update.useMutation();
   const deleteMutation = trpc.accounts.delete.useMutation();
 
   const [showCookieHelper, setShowCookieHelper] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'rumble'>('rumble');
+  
+  // Edit modal state
+  const [editAccount, setEditAccount] = useState<EditAccountData | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCookies, setEditCookies] = useState('');
+  const [updateCookies, setUpdateCookies] = useState(false);
 
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this account?')) return;
@@ -24,6 +41,51 @@ export default function LoginAccount() {
       refetch();
     } catch (error) {
       toast.error('Failed to delete account');
+    }
+  };
+
+  const openEditModal = (account: EditAccountData) => {
+    setEditAccount(account);
+    setEditName(account.accountName);
+    setEditCookies('');
+    setUpdateCookies(false);
+  };
+
+  const closeEditModal = () => {
+    setEditAccount(null);
+    setEditName('');
+    setEditCookies('');
+    setUpdateCookies(false);
+  };
+
+  const handleUpdate = async () => {
+    if (!editAccount) return;
+
+    try {
+      const updateData: { id: number; accountName?: string; cookies?: string; cookieExpiresAt?: Date } = {
+        id: editAccount.id,
+      };
+
+      // Only update name if changed
+      if (editName !== editAccount.accountName) {
+        updateData.accountName = editName;
+      }
+
+      // Only update cookies if user chose to and provided new ones
+      if (updateCookies && editCookies.trim()) {
+        updateData.cookies = editCookies.trim();
+        // Reset cookie expiration to 30 days from now
+        const expirationDate = new Date();
+        expirationDate.setDate(expirationDate.getDate() + 30);
+        updateData.cookieExpiresAt = expirationDate;
+      }
+
+      await updateMutation.mutateAsync(updateData);
+      toast.success('Account updated successfully!');
+      refetch();
+      closeEditModal();
+    } catch (error) {
+      toast.error('Failed to update account');
     }
   };
 
@@ -88,6 +150,74 @@ export default function LoginAccount() {
           />
         )}
 
+        {/* Edit Account Modal */}
+        <Dialog open={!!editAccount} onOpenChange={(open) => !open && closeEditModal()}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Account</DialogTitle>
+              <DialogDescription>
+                Update account name or refresh cookies
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Account Name</label>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Account name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="updateCookies"
+                    checked={updateCookies}
+                    onChange={(e) => setUpdateCookies(e.target.checked)}
+                    className="rounded"
+                  />
+                  <label htmlFor="updateCookies" className="text-sm font-medium cursor-pointer">
+                    Update cookies (refresh session)
+                  </label>
+                </div>
+                
+                {updateCookies && (
+                  <div className="space-y-2 mt-3 p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground">
+                      Paste new cookies from Cookie-Editor extension (Export → Header String)
+                    </p>
+                    <Textarea
+                      value={editCookies}
+                      onChange={(e) => setEditCookies(e.target.value)}
+                      placeholder="Paste new cookies here..."
+                      rows={4}
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={closeEditModal}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleUpdate}
+                disabled={updateMutation.isPending || (updateCookies && !editCookies.trim())}
+              >
+                {updateMutation.isPending ? (
+                  <Loader2 className="animate-spin mr-2" size={16} />
+                ) : null}
+                Save Changes
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Accounts List */}
         <Card className="p-6">
           <h2 className="text-xl font-semibold text-foreground mb-4">Your Accounts</h2>
@@ -144,18 +274,34 @@ export default function LoginAccount() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => openEditModal({
+                          id: account.id,
+                          accountName: account.accountName,
+                          cookies: account.cookies,
+                          platform: account.platform,
+                        })}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1"
+                      >
+                        <Pencil size={14} />
+                        Edit
+                      </Button>
                       {(isExpired || isExpiringSoon) && (
                         <Button
-                          onClick={() => {
-                            setSelectedPlatform(account.platform);
-                            setShowCookieHelper(true);
-                          }}
+                          onClick={() => openEditModal({
+                            id: account.id,
+                            accountName: account.accountName,
+                            cookies: account.cookies,
+                            platform: account.platform,
+                          })}
                           variant="outline"
                           size="sm"
-                          className="flex items-center gap-1"
+                          className="flex items-center gap-1 border-yellow-500 text-yellow-600 hover:bg-yellow-50"
                         >
                           <RefreshCw size={14} />
-                          Refresh Cookies
+                          Refresh
                         </Button>
                       )}
                       <button
