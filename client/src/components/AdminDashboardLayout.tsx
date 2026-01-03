@@ -54,10 +54,10 @@ export default function AdminDashboardLayout({ children }: AdminDashboardLayoutP
         <nav className="flex-1 p-4 space-y-2">
           {navigationItems.map((item) => (
             <Link key={item.href} href={item.href}>
-              <a className="flex items-center gap-3 px-4 py-2 rounded hover:bg-accent text-foreground hover:text-accent-foreground transition-colors">
+              <div className="flex items-center gap-3 px-4 py-2 rounded hover:bg-accent text-foreground hover:text-accent-foreground transition-colors cursor-pointer">
                 <span className="text-xl">{item.icon}</span>
                 {sidebarOpen && <span className="text-sm">{item.label}</span>}
-              </a>
+              </div>
             </Link>
           ))}
         </nav>

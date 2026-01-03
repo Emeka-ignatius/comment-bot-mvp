@@ -279,3 +279,8 @@
 - [x] Remove Puppeteer dependency (using Playwright chromium)
 - [ ] Test screenshot capture with Playwright
 - [ ] Verify AI comment generation still works
+
+## Fix Playwright Browser Installation and Nested Anchor Errors
+- [x] Install Playwright browsers with `pnpm exec playwright install`
+- [x] Find and fix nested `<a>` tag in AdminDashboardLayout
+- [ ] Test AI Auto-Comment preview functionality
