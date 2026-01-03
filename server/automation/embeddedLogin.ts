@@ -278,9 +278,71 @@ async function captureSessionCookies(sessionId: string) {
   if (!session) return;
 
   try {
-    const cookies = await session.page.cookies();
+    // Get cookies from ALL relevant domains for the platform
+    let allCookies: any[] = [];
+    
+    if (session.platform === 'rumble') {
+      // Get cookies from all Rumble domains
+      const rumbleDomains = [
+        'https://rumble.com',
+        'https://www.rumble.com',
+        'https://web7.rumble.com',
+        'https://api.rumble.com',
+      ];
+      
+      for (const domain of rumbleDomains) {
+        try {
+          const domainCookies = await session.page.cookies(domain);
+          console.log(`[EmbeddedLogin] Cookies from ${domain}: ${domainCookies.length}`);
+          allCookies.push(...domainCookies);
+        } catch (e) {
+          // Ignore errors for domains that don't have cookies
+        }
+      }
+      
+      // Also get cookies from current page
+      const pageCookies = await session.page.cookies();
+      allCookies.push(...pageCookies);
+      
+    } else if (session.platform === 'youtube') {
+      // Get cookies from all Google/YouTube domains
+      const googleDomains = [
+        'https://youtube.com',
+        'https://www.youtube.com',
+        'https://accounts.google.com',
+        'https://google.com',
+        'https://www.google.com',
+      ];
+      
+      for (const domain of googleDomains) {
+        try {
+          const domainCookies = await session.page.cookies(domain);
+          console.log(`[EmbeddedLogin] Cookies from ${domain}: ${domainCookies.length}`);
+          allCookies.push(...domainCookies);
+        } catch (e) {
+          // Ignore errors for domains that don't have cookies
+        }
+      }
+      
+      // Also get cookies from current page
+      const pageCookies = await session.page.cookies();
+      allCookies.push(...pageCookies);
+    } else {
+      allCookies = await session.page.cookies();
+    }
+    
+    // Deduplicate cookies by name (keep the most recent/longest value)
+    const cookieMap = new Map<string, any>();
+    for (const cookie of allCookies) {
+      const existing = cookieMap.get(cookie.name);
+      if (!existing || cookie.value.length > existing.value.length) {
+        cookieMap.set(cookie.name, cookie);
+      }
+    }
+    const uniqueCookies = Array.from(cookieMap.values());
 
     console.log(`[EmbeddedLogin] === FINAL COOKIE CAPTURE ===`);
+<<<<<<< HEAD
     console.log(`[EmbeddedLogin] Total cookies to save: ${cookies.length}`);
     cookies.forEach((c, idx) => {
       const valuePreview =
@@ -292,6 +354,18 @@ async function captureSessionCookies(sessionId: string) {
     const cookieString = cookies
       .map(cookie => `${cookie.name}=${cookie.value}`)
       .join("; ");
+=======
+    console.log(`[EmbeddedLogin] Total unique cookies to save: ${uniqueCookies.length}`);
+    uniqueCookies.forEach((c, idx) => {
+      const valuePreview = c.value.substring(0, 50) + (c.value.length > 50 ? '...' : '');
+      console.log(`  [${idx + 1}] ${c.name} = ${valuePreview} (domain: ${c.domain})`);
+    });
+
+    // Format cookies as string (name=value; name2=value2)
+    const cookieString = uniqueCookies
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+>>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
 
     session.cookies = cookieString;
     session.status = "logged_in";

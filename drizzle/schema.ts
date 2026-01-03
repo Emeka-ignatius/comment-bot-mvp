@@ -72,6 +72,7 @@ export const jobs = mysqlTable("jobs", {
 });
 
 export const logs = mysqlTable("logs", {
+<<<<<<< HEAD
   id: int().autoincrement().notNull(),
   userId: int()
     .notNull()
@@ -86,6 +87,20 @@ export const logs = mysqlTable("logs", {
   createdAt: timestamp({ mode: "string" })
     .default("CURRENT_TIMESTAMP")
     .notNull(),
+=======
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  jobId: int("jobId").references(() => jobs.id, { onDelete: "cascade" }), // Nullable for AI comments
+  accountId: int("accountId").references(() => accounts.id, { onDelete: "set null" }), // Account used
+  videoId: int("videoId").references(() => videos.id, { onDelete: "set null" }), // Video commented on
+  platform: mysqlEnum("platform", ["youtube", "rumble"]).notNull(),
+  action: mysqlEnum("action", ["manual_comment", "ai_comment", "job_comment"]).default("job_comment").notNull(),
+  status: mysqlEnum("status", ["success", "failed", "skipped"]).notNull(),
+  message: text("message"),
+  errorDetails: text("errorDetails"),
+  metadata: text("metadata"), // JSON metadata for AI comments
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+>>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
 });
 
 export const users = mysqlTable(

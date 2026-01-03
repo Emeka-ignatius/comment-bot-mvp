@@ -15,6 +15,7 @@ import Jobs from "./pages/Jobs";
 import BatchJobs from "./pages/BatchJobs";
 import AdminDashboardLayout from "./components/AdminDashboardLayout";
 import Logs from "./pages/Logs";
+import AIAutoComment from "./pages/AIAutoComment";
 
 function Router() {
   const { user, loading } = useAuth();
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/jobs" component={Jobs} />
       <Route path="/batch" component={BatchJobs} />
       <Route path="/logs" component={Logs} />
+      <Route path="/ai-comment" component={AIAutoComment} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
