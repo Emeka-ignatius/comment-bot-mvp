@@ -259,3 +259,17 @@
 - [x] Debug video creation to find why title isn't saving
 - [x] Fix title field in video creation procedure
 - [ ] Test video title saves correctly
+
+
+## AI Auto-Comment System with Audio + Screen Reading
+- [x] Create AI comment generation service with GPT-4o (aiCommentGenerator.ts)
+- [ ] Implement audio capture from browser/OBS via WebRTC (future enhancement)
+- [ ] Add audio transcription using Whisper API (future enhancement)
+- [x] Implement screen capture for visual context (GPT-4o vision)
+- [x] Create combined context prompt (audio + visual)
+- [x] Build real-time stream monitoring UI (AIAutoComment.tsx)
+- [x] Add auto-comment configuration (interval, style, context)
+- [x] Create tRPC procedures for AI comment generation
+- [ ] Test audio transcription with live stream
+- [ ] Test screen reading with GPT-4o vision
+- [ ] Test combined AI comment generation

@@ -16,6 +16,7 @@ export default function AdminDashboardLayout({ children }: AdminDashboardLayoutP
 
   const navigationItems = [
     { label: 'Dashboard', href: '/dashboard', icon: '📊' },
+    { label: 'AI Auto-Comment', href: '/ai-comment', icon: '🤖' },
     { label: 'Accounts', href: '/accounts', icon: '🔐' },
     { label: 'Login An Account', href: '/login-account', icon: '🚀' },
     { label: 'Videos', href: '/videos', icon: '🎬' },

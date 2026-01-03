@@ -28,6 +28,17 @@ import {
 } from "./db";
 import { postRumbleCommentDirect, extractChatIdFromUrl } from "./automation/directRumbleAPI";
 import { initializeLoginSession, getSessionStatus, cancelLoginSession } from "./automation/embeddedLogin";
+import { 
+  startStreamMonitor, 
+  stopStreamMonitor, 
+  pauseStreamMonitor, 
+  resumeStreamMonitor, 
+  getMonitorStatus, 
+  getUserSessions,
+  previewAIComment,
+} from "./automation/streamMonitor";
+import { type CommentStyle } from "./automation/aiCommentGenerator";
+import { generateAIComment } from "./automation/aiCommentGenerator";
 
 export const appRouter = router({
   system: systemRouter,
@@ -302,6 +313,131 @@ export const appRouter = router({
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
       await cancelLoginSession(input.sessionId);
       return { success: true };
+    }),
+  }),
+
+  // AI Auto-Comment System
+  aiComment: router({
+    // Start monitoring a stream with AI comments
+    startMonitor: protectedProcedure.input(z.object({
+      videoId: z.number(),
+      commentStyle: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional']),
+      commentInterval: z.number().min(30).max(600), // 30 seconds to 10 minutes
+      includeEmojis: z.boolean(),
+      maxCommentLength: z.number().min(10).max(500),
+      accountIds: z.array(z.number()),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      
+      // Get the video details
+      const videos = await getVideosByUserId(ctx.user.id);
+      const video = videos.find(v => v.id === input.videoId);
+      if (!video) throw new Error('Video not found');
+      if (!video.chatId) throw new Error('Video does not have a chat ID');
+      
+      const sessionId = await startStreamMonitor({
+        videoId: input.videoId,
+        userId: ctx.user.id,
+        platform: video.platform,
+        streamUrl: video.videoUrl,
+        chatId: video.chatId,
+        commentStyle: input.commentStyle as CommentStyle,
+        commentInterval: input.commentInterval,
+        includeEmojis: input.includeEmojis,
+        maxCommentLength: input.maxCommentLength,
+        audioEnabled: false, // Audio handled separately via frontend
+        accountIds: input.accountIds,
+      });
+      
+      return { sessionId };
+    }),
+    
+    // Stop monitoring
+    stopMonitor: protectedProcedure.input(z.object({
+      sessionId: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      await stopStreamMonitor(input.sessionId);
+      return { success: true };
+    }),
+    
+    // Pause monitoring
+    pauseMonitor: protectedProcedure.input(z.object({
+      sessionId: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      pauseStreamMonitor(input.sessionId);
+      return { success: true };
+    }),
+    
+    // Resume monitoring
+    resumeMonitor: protectedProcedure.input(z.object({
+      sessionId: z.string(),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      resumeStreamMonitor(input.sessionId);
+      return { success: true };
+    }),
+    
+    // Get monitor status
+    getStatus: protectedProcedure.input(z.object({
+      sessionId: z.string(),
+    })).query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      return getMonitorStatus(input.sessionId);
+    }),
+    
+    // Get all active sessions for user
+    listSessions: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      return getUserSessions(ctx.user.id);
+    }),
+    
+    // Preview a comment without posting
+    preview: protectedProcedure.input(z.object({
+      videoId: z.number(),
+      style: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional']),
+      includeEmojis: z.boolean(),
+      maxLength: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      
+      const videos = await getVideosByUserId(ctx.user.id);
+      const video = videos.find(v => v.id === input.videoId);
+      if (!video) throw new Error('Video not found');
+      
+      return previewAIComment({
+        streamUrl: video.videoUrl,
+        platform: video.platform,
+        style: input.style as CommentStyle,
+        includeEmojis: input.includeEmojis,
+        maxLength: input.maxLength,
+      });
+    }),
+    
+    // Generate a single comment (for manual use)
+    generate: protectedProcedure.input(z.object({
+      platform: z.enum(['youtube', 'rumble']),
+      streamTitle: z.string().optional(),
+      streamerName: z.string().optional(),
+      audioTranscript: z.string().optional(),
+      screenDescription: z.string().optional(),
+      style: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional']),
+      includeEmojis: z.boolean(),
+      maxLength: z.number(),
+    })).mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin') throw new Error('Admin access required');
+      
+      return generateAIComment({
+        platform: input.platform,
+        streamTitle: input.streamTitle,
+        streamerName: input.streamerName,
+        audioTranscript: input.audioTranscript,
+        screenDescription: input.screenDescription,
+        style: input.style as CommentStyle,
+        includeEmojis: input.includeEmojis,
+        maxLength: input.maxLength,
+      });
     }),
   }),
 });

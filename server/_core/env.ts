@@ -8,4 +8,7 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   mockMode: process.env.MOCK_AUTOMATION === 'true',
+  // OpenAI API for GPT-4o (vision + chat)
+  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
+  openaiBaseUrl: process.env.OPEN_AI_BASE_URL ?? "https://api.openai.com",
 };
