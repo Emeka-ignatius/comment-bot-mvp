@@ -5,7 +5,7 @@
  * Uses Puppeteer to capture screenshots for visual context
  */
 
-import puppeteer, { Browser, Page } from 'puppeteer';
+import { chromium, Browser, Page } from 'playwright';
 import { generateAIComment, analyzeScreenshot, CommentStyle } from './aiCommentGenerator';
 import { postRumbleCommentDirect } from './directRumbleAPI';
 import { createJob, getAccountsByUserId, getVideosByUserId, createLog } from '../db';
@@ -70,7 +70,7 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     // Launch browser for screenshot capture
     console.log(`[StreamMonitor] Starting session ${sessionId} for ${config.streamUrl}`);
     
-    const browser = await puppeteer.launch({
+    const browser = await chromium.launch({
       headless: true,
       args: [
         '--no-sandbox',
@@ -83,11 +83,11 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     session.browser = browser;
     
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
+    await page.setViewportSize({ width: 1280, height: 720 });
     
     // Navigate to stream
     console.log(`[StreamMonitor] Navigating to ${config.streamUrl}`);
-    await page.goto(config.streamUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(config.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
     
     session.page = page;
     session.status = 'running';
@@ -141,9 +141,8 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
       const screenshot = await session.page.screenshot({ 
         type: 'jpeg', 
         quality: 60,
-        encoding: 'base64',
       });
-      screenImageBase64 = screenshot as string;
+      screenImageBase64 = screenshot.toString('base64');
       
       // Analyze the screenshot
       screenDescription = await analyzeScreenshot(screenImageBase64);
@@ -347,18 +346,18 @@ export async function previewAIComment(params: {
   
   try {
     // Launch browser to capture screenshot
-    browser = await puppeteer.launch({
+    browser = await chromium.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
-    await page.goto(params.streamUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(params.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
     
     // Capture and analyze screenshot
-    const screenshot = await page.screenshot({ type: 'jpeg', quality: 60, encoding: 'base64' });
-    const screenImageBase64 = screenshot as string;
+    const screenshot = await page.screenshot({ type: 'jpeg', quality: 60 });
+    const screenImageBase64 = screenshot.toString('base64');
     const screenDescription = await analyzeScreenshot(screenImageBase64);
     
     // Generate comment

@@ -273,3 +273,9 @@
 - [ ] Test audio transcription with live stream
 - [ ] Test screen reading with GPT-4o vision
 - [ ] Test combined AI comment generation
+
+## Replace Puppeteer with Playwright in AI Auto-Comment
+- [x] Update streamMonitor.ts to use Playwright instead of Puppeteer
+- [x] Remove Puppeteer dependency (using Playwright chromium)
+- [ ] Test screenshot capture with Playwright
+- [ ] Verify AI comment generation still works
