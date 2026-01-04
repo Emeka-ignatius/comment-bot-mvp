@@ -284,3 +284,9 @@
 - [x] Install Playwright browsers with `pnpm exec playwright install`
 - [x] Find and fix nested `<a>` tag in AdminDashboardLayout
 - [ ] Test AI Auto-Comment preview functionality
+
+## Setup and Usage Documentation
+- [x] Create comprehensive step-by-step guide for AI Auto-Comment (SETUP_GUIDE.md)
+- [x] Add better error handling for ended/unavailable streams
+- [x] Add local development authentication bypass (LOCAL_DEV_MODE)
+- [x] Document local development setup process (LOCAL_DEV_SETUP.md)

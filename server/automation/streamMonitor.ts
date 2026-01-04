@@ -87,7 +87,19 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     
     // Navigate to stream
     console.log(`[StreamMonitor] Navigating to ${config.streamUrl}`);
-    await page.goto(config.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    try {
+      await page.goto(config.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    } catch (navError) {
+      // If networkidle times out, try with domcontentloaded instead
+      console.warn(`[StreamMonitor] Network idle timeout, trying with domcontentloaded`);
+      await page.goto(config.streamUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    }
+    
+    // Check if page loaded successfully
+    const pageTitle = await page.title();
+    if (pageTitle.includes('404') || pageTitle.includes('Not Found')) {
+      throw new Error('Stream not found or has ended. Please add a new live stream URL.');
+    }
     
     session.page = page;
     session.status = 'running';
