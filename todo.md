@@ -290,3 +290,8 @@
 - [x] Add better error handling for ended/unavailable streams
 - [x] Add local development authentication bypass (LOCAL_DEV_MODE)
 - [x] Document local development setup process (LOCAL_DEV_SETUP.md)
+
+## Fix AI Preview Timeout and React Warnings
+- [x] Fix page.goto timeout error with better fallback
+- [x] Fix React setState-in-render warning in Router
+- [ ] Test AI preview with live stream

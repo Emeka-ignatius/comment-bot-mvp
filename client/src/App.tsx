@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
+import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { useAuth } from "./_core/hooks/useAuth";
@@ -22,9 +23,11 @@ function Router() {
   const [location, setLocation] = useLocation();
 
   // Redirect to dashboard if authenticated and on home page
-  if (!loading && user && location === "/") {
-    setLocation("/dashboard");
-  }
+  useEffect(() => {
+    if (!loading && user && location === "/") {
+      setLocation("/dashboard");
+    }
+  }, [loading, user, location, setLocation]);
 
   return (
     <Switch>

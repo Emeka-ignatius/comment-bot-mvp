@@ -365,7 +365,24 @@ export async function previewAIComment(params: {
     
     const page = await browser.newPage();
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto(params.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    
+    // Try to navigate with fallback
+    try {
+      await page.goto(params.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    } catch (navError) {
+      console.warn(`[Preview] Network idle timeout, trying with domcontentloaded`);
+      try {
+        await page.goto(params.streamUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      } catch (fallbackError) {
+        throw new Error('Stream is unavailable or has ended. Please try with a currently live stream.');
+      }
+    }
+    
+    // Check if page loaded successfully
+    const pageTitle = await page.title();
+    if (pageTitle.includes('404') || pageTitle.includes('Not Found')) {
+      throw new Error('Stream not found or has ended. Please add a new live stream URL.');
+    }
     
     // Capture and analyze screenshot
     const screenshot = await page.screenshot({ type: 'jpeg', quality: 60 });
