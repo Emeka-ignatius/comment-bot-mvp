@@ -306,3 +306,9 @@
 - [x] Fix Home page to show proper login UI
 - [x] Update LOCAL_DEV_SETUP.md with clearer instructions
 - [ ] Test local development flow
+
+## Fix OpenAI Network Connectivity (ECONNRESET)
+- [x] Identified issue: Sandbox blocking outbound HTTPS to api.openai.com
+- [x] Switch aiCommentGenerator to use built-in invokeLLM helper
+- [x] Test AI comment generation with invokeLLM (2 tests passing)
+- [x] Vision API now working with Manus Forge API

@@ -6,7 +6,7 @@
  */
 
 import { chromium, Browser, Page } from 'playwright';
-import { generateAIComment, analyzeScreenshot, CommentStyle } from './aiCommentGenerator';
+import { generateAIComment, CommentStyle } from './aiCommentGenerator';
 import { postRumbleCommentDirect } from './directRumbleAPI';
 import { createJob, getAccountsByUserId, getVideosByUserId, createLog } from '../db';
 
@@ -147,7 +147,6 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
     
     // Capture screenshot
     let screenImageBase64: string | undefined;
-    let screenDescription: string | undefined;
     
     try {
       const screenshot = await session.page.screenshot({ 
@@ -156,9 +155,8 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
       });
       screenImageBase64 = screenshot.toString('base64');
       
-      // Analyze the screenshot
-      screenDescription = await analyzeScreenshot(screenImageBase64);
-      console.log(`[StreamMonitor] Screen analysis: ${screenDescription}`);
+      // Pass screenshot directly to AI for analysis
+      console.log(`[StreamMonitor] Screenshot captured, will be analyzed by AI`);
     } catch (err) {
       console.error(`[StreamMonitor] Screenshot failed:`, err);
     }
@@ -166,7 +164,6 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
     // Generate AI comment
     const result = await generateAIComment({
       screenImageBase64,
-      screenDescription,
       platform: config.platform,
       style: config.commentStyle,
       maxLength: config.maxCommentLength,
@@ -353,7 +350,7 @@ export async function previewAIComment(params: {
   style: CommentStyle;
   includeEmojis: boolean;
   maxLength: number;
-}): Promise<{ comment: string; confidence: number; reasoning?: string; screenDescription?: string }> {
+}): Promise<{ comment: string; confidence: number; reasoning?: string }> {
   let browser: Browser | null = null;
   
   try {
@@ -387,22 +384,18 @@ export async function previewAIComment(params: {
     // Capture and analyze screenshot
     const screenshot = await page.screenshot({ type: 'jpeg', quality: 60 });
     const screenImageBase64 = screenshot.toString('base64');
-    const screenDescription = await analyzeScreenshot(screenImageBase64);
+    // Screenshot will be analyzed by AI during comment generation
     
     // Generate comment
     const result = await generateAIComment({
       screenImageBase64,
-      screenDescription,
       platform: params.platform,
       style: params.style,
       maxLength: params.maxLength,
       includeEmojis: params.includeEmojis,
     });
     
-    return {
-      ...result,
-      screenDescription,
-    };
+    return result;
     
   } finally {
     if (browser) {
