@@ -295,3 +295,14 @@
 - [x] Fix page.goto timeout error with better fallback
 - [x] Fix React setState-in-render warning in Router
 - [ ] Test AI preview with live stream
+
+## CRITICAL: Fix OpenAI API 404 Error
+- [x] Check OPEN_AI_BASE_URL environment variable
+- [x] Ensure it points to https://api.openai.com/v1 not Forge API
+- [x] Test AI comment generation with correct URL (3 tests passing)
+
+## Fix Local Development Authentication
+- [x] Improve LOCAL_DEV_MODE detection and auto-login
+- [x] Fix Home page to show proper login UI
+- [x] Update LOCAL_DEV_SETUP.md with clearer instructions
+- [ ] Test local development flow
