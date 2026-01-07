@@ -312,3 +312,16 @@
 - [x] Switch aiCommentGenerator to use built-in invokeLLM helper
 - [x] Test AI comment generation with invokeLLM (2 tests passing)
 - [x] Vision API now working with Manus Forge API
+
+## Audio Transcription Integration
+- [x] Create audioCapture.ts service for capturing stream audio
+- [x] Create audioTranscriber.ts service for transcription + caching
+- [x] Write 17 vitest tests for audio transcriber (all passing)
+- [x] Update streamMonitor to capture audio every N seconds
+- [x] Integrate audio transcripts into AI comment generation
+- [x] Add audio parameters to AIAutoComment UI
+- [x] Update routers to accept audioEnabled and audioInterval parameters
+- [x] Implement call-to-action detection from transcripts
+- [ ] Test audio capture with live stream
+- [ ] Test audio transcription with Whisper API
+- [ ] Verify AI generates comments based on what streamer says
