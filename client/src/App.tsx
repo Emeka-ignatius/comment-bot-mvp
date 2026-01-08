@@ -8,7 +8,6 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { useAuth } from "./_core/hooks/useAuth";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
-import Accounts from "./pages/AccountsWithHealth";
 import LoginAccount from "./pages/LoginAccount";
 import Videos from "./pages/Videos";
 import Comments from "./pages/Comments";
@@ -33,7 +32,6 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/dashboard" component={Dashboard} />
-      <Route path="/accounts" component={Accounts} />
       <Route path="/login-account" component={LoginAccount} />
       <Route path="/videos" component={Videos} />
       <Route path="/comments" component={Comments} />

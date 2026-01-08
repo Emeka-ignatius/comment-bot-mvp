@@ -325,3 +325,35 @@
 - [ ] Test audio capture with live stream
 - [ ] Test audio transcription with Whisper API
 - [ ] Verify AI generates comments based on what streamer says
+
+
+## Live Stream Testing Feedback (Jan 8, 2026)
+
+### Critical Issues Found
+- [x] AI comments were too obvious/robotic - need more emojis and stream lingos
+- [ ] Audio transcription may not be working (need to test if audio is actually being captured)
+- [ ] Screen reading/visual context wasn't being used effectively
+- [x] Chat ID extraction failing intermittently even with valid cookies
+- [ ] Comments taking time to display on screen (chat delay issue)
+- [ ] Possible IP blocking or rate limiting causing delays
+
+### High Priority Fixes
+- [x] Remove Accounts page - keep only "Login An Account" for simplicity
+- [x] Add audio confidence scoring to prevent low-quality transcription comments
+- [x] Improve AI prompt to use more emojis and stream-specific language
+- [ ] Reduce minimum delay between comments (currently 30-60s, should be 10-30s)
+- [x] Make entire UI mobile-responsive (currently not mobile-friendly)
+- [x] Clean up unused/broken code from codebase
+
+### Medium Priority
+- [ ] Debug chat ID extraction reliability
+- [ ] Implement retry logic for failed chat ID extractions
+- [ ] Add better error messages for chat disabled/not found scenarios
+- [ ] Optimize comment posting speed
+
+### Testing Plan for Next Stream
+- [ ] Test audio transcription is actually capturing audio
+- [ ] Verify AI responds to what streamer says
+- [ ] Test with more emojis and stream lingos
+- [ ] Monitor chat delay and posting speed
+- [ ] Test chat ID extraction with fresh stream

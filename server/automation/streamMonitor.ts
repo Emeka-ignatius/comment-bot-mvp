@@ -197,11 +197,12 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
       previousComments: session.previousComments.slice(-5), // Last 5 comments
     });
     
-    console.log(`[StreamMonitor] Generated comment: "${result.comment}" (confidence: ${result.confidence})`);
+    console.log(`[StreamMonitor] Generated comment: "${result.comment}" (confidence: ${(result.confidence * 100).toFixed(0)}%, reasoning: ${result.reasoning})`);
     
-    // Only post if confidence is high enough
-    if (result.confidence < 0.5) {
-      console.log(`[StreamMonitor] Skipping low-confidence comment`);
+    // Only post if confidence is high enough (0.6 = 60% confidence threshold)
+    const CONFIDENCE_THRESHOLD = 0.6;
+    if (result.confidence < CONFIDENCE_THRESHOLD) {
+      console.log(`[StreamMonitor] Skipping low-confidence comment (${(result.confidence * 100).toFixed(0)}% < ${(CONFIDENCE_THRESHOLD * 100).toFixed(0)}%)`);
       return;
     }
     

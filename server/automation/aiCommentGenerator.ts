@@ -61,6 +61,11 @@ export async function generateAIComment(params: GenerateCommentParams): Promise<
     previousComments = [],
   } = params;
   
+  // Validate audio transcript quality if available
+  if (audioTranscript && audioTranscript.length < 5) {
+    console.warn('[AICommentGenerator] Audio transcript too short, may be low quality');
+  }
+  
   // Build the system prompt
   const systemPrompt = buildSystemPrompt({
     style,
@@ -174,25 +179,28 @@ function buildSystemPrompt(opts: {
   const { style, maxLength, avoidTopics, includeEmojis, platform, streamerName } = opts;
   
   const styleDescriptions = {
-    engaging: "Be enthusiastic, ask questions, and show genuine interest. React to exciting moments.",
-    supportive: "Be positive and encouraging. Compliment the streamer and support their content.",
-    curious: "Ask thoughtful questions about what's happening. Show interest in learning more.",
-    casual: "Be relaxed and conversational. Use casual language like you're chatting with a friend.",
-    professional: "Be formal and informative. Provide constructive feedback or insights.",
+    engaging: "Be enthusiastic, ask questions, and show genuine interest. React to exciting moments. Use lots of emojis! 🔥 Use stream-specific language like 'no cap', 'fr fr', 'bussin', 'slay', 'ate', etc.",
+    supportive: "Be positive and encouraging. Compliment the streamer and support their content. Use emojis like 💪 ❤️ 🙌. Use phrases like 'keep it up', 'you got this', 'fire content'.",
+    curious: "Ask thoughtful questions about what's happening. Show interest in learning more. Use curious emojis like 🤔 ❓ 👀. Ask 'what's next?', 'how did you...?', 'why did you...?'",
+    casual: "Be relaxed and conversational. Use casual language like you're chatting with a friend. Use emojis freely 😂 💯 👏. Use slang like 'lol', 'ngl', 'lowkey', 'highkey', 'bet'.",
+    professional: "Be formal and informative. Provide constructive feedback or insights. Use professional emojis like 📊 💼 ✅. Use phrases like 'great point', 'well explained', 'impressive work'.",
   };
   
   let prompt = `You are a helpful assistant that generates natural, contextual comments for ${platform} live streams.
 
-Your task is to generate a single comment that feels authentic and engaging.
+Your task is to generate a single comment that feels authentic, engaging, and like it came from a real viewer.
 
 **Style**: ${styleDescriptions[style]}
 
 **Requirements**:
 - Maximum ${maxLength} characters
-- ${includeEmojis ? 'Include relevant emojis where appropriate' : 'Do NOT use emojis'}
-- Sound like a real viewer, not a bot
-- Be specific to what's happening in the stream
-- Don't be overly promotional or spammy`;
+- ${includeEmojis ? 'USE LOTS OF RELEVANT EMOJIS! 🎉 😂 🔥 💯 👀 etc.' : 'Do NOT use emojis'}
+- Sound like a real viewer, NOT a bot or AI
+- Be specific and contextual to what's happening
+- Use modern internet slang and stream culture language
+- Don't be overly promotional or spammy
+- React emotionally and authentically
+- Keep it short and punchy`;
 
   if (streamerName) {
     prompt += `\n- You can address the streamer as "${streamerName}"`;
@@ -202,8 +210,15 @@ Your task is to generate a single comment that feels authentic and engaging.
     prompt += `\n- AVOID mentioning these topics: ${avoidTopics.join(', ')}`;
   }
 
-  prompt += `\n\n**Output Format**: Return a JSON object with:
-- comment: The actual comment text
+  prompt += `\n\n**Confidence Scoring**:
+- 0.9-1.0: Perfect fit, responds directly to what's happening
+- 0.7-0.9: Good fit, relevant to the stream
+- 0.5-0.7: Decent fit, generic but appropriate
+- 0.3-0.5: Weak fit, might not match context well
+- 0.0-0.3: Poor fit, don't use this comment
+
+**Output Format**: Return a JSON object with:
+- comment: The actual comment text (must feel like a real viewer)
 - confidence: A number from 0 to 1 indicating how well this comment fits the context
 - reasoning: A brief explanation of why this comment is appropriate`;
 
@@ -228,7 +243,7 @@ function buildUserMessage(opts: {
   }
   
   if (audioTranscript) {
-    message += `**Recent Audio/Transcript**:\n${audioTranscript}\n\n`;
+    message += `**What the Streamer Just Said**:\n${audioTranscript}\n\n**IMPORTANT**: Respond directly to what was said! If they asked a question, answer it. If they made a joke, react to it. If they said something cool, hype it up!\n\n`;
   }
   
   if (screenDescription) {
@@ -240,10 +255,10 @@ function buildUserMessage(opts: {
   }
   
   if (!audioTranscript && !screenDescription) {
-    message += "**Note**: No specific context available. Generate a general engaging comment that would work for most streams.\n\n";
+    message += "**Note**: No specific context available. Generate a general engaging comment that would work for most streams. Use lots of emojis and energy!\n\n";
   }
   
-  message += "Now generate an appropriate comment.";
+  message += "Now generate a comment that feels like it came from a real, engaged viewer. Make it authentic and fun!";
   
   return message;
 }
