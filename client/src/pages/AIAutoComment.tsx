@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import AdminDashboardLayout from '@/components/AdminDashboardLayout';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
@@ -10,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Play, Pause, Square, Sparkles, Eye, MessageSquare, Clock, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { useState } from 'react';
 
 type CommentStyle = 'engaging' | 'supportive' | 'curious' | 'casual' | 'professional';
 
@@ -30,6 +30,8 @@ export default function AIAutoComment() {
   const [commentInterval, setCommentInterval] = useState(60); // seconds
   const [includeEmojis, setIncludeEmojis] = useState(true);
   const [maxCommentLength, setMaxCommentLength] = useState(150);
+  const [audioEnabled, setAudioEnabled] = useState(true); // Enable audio transcription by default
+  const [audioInterval, setAudioInterval] = useState(30); // Capture audio every 30 seconds
   
   // Preview state
   const [previewComment, setPreviewComment] = useState<string | null>(null);
@@ -134,6 +136,8 @@ export default function AIAutoComment() {
       includeEmojis,
       maxCommentLength,
       accountIds: selectedAccountIds,
+      audioEnabled,
+      audioInterval,
     });
   };
   
@@ -144,6 +148,8 @@ export default function AIAutoComment() {
     casual: 'Relaxed, conversational, like chatting with friends',
     professional: 'Informative and respectful, adds value',
   };
+  
+
 
   return (
     <AdminDashboardLayout>
@@ -358,6 +364,49 @@ export default function AIAutoComment() {
                 checked={includeEmojis}
                 onCheckedChange={setIncludeEmojis}
               />
+            </div>
+            
+            {/* Audio Transcription */}
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    Audio Transcription
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Capture and transcribe stream audio for richer context
+                  </p>
+                </div>
+                <Switch
+                  checked={audioEnabled}
+                  onCheckedChange={setAudioEnabled}
+                />
+              </div>
+              
+              {audioEnabled && (
+                <div className="space-y-2 pl-4 border-l-2 border-primary/30">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Audio Capture Interval</Label>
+                    <span className="text-sm text-muted-foreground">
+                      {audioInterval < 60 
+                        ? `${audioInterval} seconds`
+                        : `${Math.floor(audioInterval / 60)} min`
+                      }
+                    </span>
+                  </div>
+                  <Slider
+                    value={[audioInterval]}
+                    onValueChange={([v]) => setAudioInterval(v)}
+                    min={15}
+                    max={120}
+                    step={5}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How often to capture and transcribe audio from the stream
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

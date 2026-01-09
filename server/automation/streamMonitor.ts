@@ -6,9 +6,11 @@
  */
 
 import { chromium, Browser, Page } from 'playwright';
-import { generateAIComment, analyzeScreenshot, CommentStyle } from './aiCommentGenerator';
+import { generateAIComment, CommentStyle } from './aiCommentGenerator';
 import { postRumbleCommentDirect } from './directRumbleAPI';
 import { createJob, getAccountsByUserId, getVideosByUserId, createLog } from '../db';
+import { captureStreamAudio, capturePageContextAudio } from './audioCapture';
+import { transcribeStreamAudio, detectCallToAction, summarizeTranscript } from './audioTranscriber';
 
 export interface StreamMonitorConfig {
   videoId: number;                    // Video ID from database
@@ -23,8 +25,9 @@ export interface StreamMonitorConfig {
   includeEmojis: boolean;
   maxCommentLength: number;
   
-  // Audio settings (optional - from frontend)
+  // Audio settings
   audioEnabled: boolean;
+  audioInterval: number;              // Seconds between audio captures (e.g., 30)
   
   // Account rotation
   accountIds: number[];               // Account IDs to rotate through
@@ -37,8 +40,11 @@ export interface MonitorSession {
   browser?: Browser;
   page?: Page;
   intervalId?: NodeJS.Timeout;
+  audioIntervalId?: NodeJS.Timeout;
   lastComment?: string;
   lastCommentTime?: Date;
+  lastAudioTranscript?: string;
+  lastAudioTime?: Date;
   commentsPosted: number;
   errors: string[];
   currentAccountIndex: number;
@@ -87,7 +93,19 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     
     // Navigate to stream
     console.log(`[StreamMonitor] Navigating to ${config.streamUrl}`);
-    await page.goto(config.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    try {
+      await page.goto(config.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    } catch (navError) {
+      // If networkidle times out, try with domcontentloaded instead
+      console.warn(`[StreamMonitor] Network idle timeout, trying with domcontentloaded`);
+      await page.goto(config.streamUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    }
+    
+    // Check if page loaded successfully
+    const pageTitle = await page.title();
+    if (pageTitle.includes('404') || pageTitle.includes('Not Found')) {
+      throw new Error('Stream not found or has ended. Please add a new live stream URL.');
+    }
     
     session.page = page;
     session.status = 'running';
@@ -100,6 +118,18 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
         session.errors.push(err.message);
       });
     }, intervalMs);
+    
+    // Start audio capture loop if enabled
+    if (config.audioEnabled) {
+      const audioIntervalMs = config.audioInterval * 1000;
+      session.audioIntervalId = setInterval(() => {
+        captureAndTranscribeAudio(session).catch(err => {
+          console.error(`[StreamMonitor] Error in audio capture:`, err);
+          // Don't add to errors array - audio is optional
+        });
+      }, audioIntervalMs);
+      console.log(`[StreamMonitor] Audio capture started (every ${config.audioInterval}s)`);
+    }
     
     // Generate first comment immediately
     setTimeout(() => {
@@ -135,7 +165,6 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
     
     // Capture screenshot
     let screenImageBase64: string | undefined;
-    let screenDescription: string | undefined;
     
     try {
       const screenshot = await session.page.screenshot({ 
@@ -144,17 +173,23 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
       });
       screenImageBase64 = screenshot.toString('base64');
       
-      // Analyze the screenshot
-      screenDescription = await analyzeScreenshot(screenImageBase64);
-      console.log(`[StreamMonitor] Screen analysis: ${screenDescription}`);
+      // Pass screenshot directly to AI for analysis
+      console.log(`[StreamMonitor] Screenshot captured, will be analyzed by AI`);
     } catch (err) {
       console.error(`[StreamMonitor] Screenshot failed:`, err);
     }
     
-    // Generate AI comment
+    // Get recent audio transcript if available
+    let audioTranscript: string | undefined;
+    if (config.audioEnabled && session.lastAudioTranscript) {
+      audioTranscript = summarizeTranscript(session.lastAudioTranscript, 300);
+      console.log(`[StreamMonitor] Using audio context: ${audioTranscript.slice(0, 50)}...`);
+    }
+    
+    // Generate AI comment with both visual and audio context
     const result = await generateAIComment({
       screenImageBase64,
-      screenDescription,
+      audioTranscript,
       platform: config.platform,
       style: config.commentStyle,
       maxLength: config.maxCommentLength,
@@ -162,11 +197,12 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
       previousComments: session.previousComments.slice(-5), // Last 5 comments
     });
     
-    console.log(`[StreamMonitor] Generated comment: "${result.comment}" (confidence: ${result.confidence})`);
+    console.log(`[StreamMonitor] Generated comment: "${result.comment}" (confidence: ${(result.confidence * 100).toFixed(0)}%, reasoning: ${result.reasoning})`);
     
-    // Only post if confidence is high enough
-    if (result.confidence < 0.5) {
-      console.log(`[StreamMonitor] Skipping low-confidence comment`);
+    // Only post if confidence is high enough (0.6 = 60% confidence threshold)
+    const CONFIDENCE_THRESHOLD = 0.6;
+    if (result.confidence < CONFIDENCE_THRESHOLD) {
+      console.log(`[StreamMonitor] Skipping low-confidence comment (${(result.confidence * 100).toFixed(0)}% < ${(CONFIDENCE_THRESHOLD * 100).toFixed(0)}%)`);
       return;
     }
     
@@ -255,6 +291,10 @@ export async function stopStreamMonitor(sessionId: string): Promise<void> {
     clearInterval(session.intervalId);
   }
   
+  if (session.audioIntervalId) {
+    clearInterval(session.audioIntervalId);
+  }
+  
   if (session.browser) {
     await session.browser.close();
   }
@@ -278,6 +318,11 @@ export function pauseStreamMonitor(sessionId: string): void {
     session.intervalId = undefined;
   }
   
+  if (session.audioIntervalId) {
+    clearInterval(session.audioIntervalId);
+    session.audioIntervalId = undefined;
+  }
+  
   console.log(`[StreamMonitor] Session ${sessionId} paused`);
 }
 
@@ -298,6 +343,16 @@ export function resumeStreamMonitor(sessionId: string): void {
       session.errors.push(err.message);
     });
   }, intervalMs);
+  
+  // Resume audio capture if enabled
+  if (session.config.audioEnabled && !session.audioIntervalId) {
+    const audioIntervalMs = session.config.audioInterval * 1000;
+    session.audioIntervalId = setInterval(() => {
+      captureAndTranscribeAudio(session).catch(err => {
+        console.error(`[StreamMonitor] Error in audio capture:`, err);
+      });
+    }, audioIntervalMs);
+  }
   
   console.log(`[StreamMonitor] Session ${sessionId} resumed`);
 }
@@ -341,7 +396,7 @@ export async function previewAIComment(params: {
   style: CommentStyle;
   includeEmojis: boolean;
   maxLength: number;
-}): Promise<{ comment: string; confidence: number; reasoning?: string; screenDescription?: string }> {
+}): Promise<{ comment: string; confidence: number; reasoning?: string }> {
   let browser: Browser | null = null;
   
   try {
@@ -353,31 +408,122 @@ export async function previewAIComment(params: {
     
     const page = await browser.newPage();
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto(params.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    
+    // Try to navigate with fallback
+    try {
+      await page.goto(params.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    } catch (navError) {
+      console.warn(`[Preview] Network idle timeout, trying with domcontentloaded`);
+      try {
+        await page.goto(params.streamUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      } catch (fallbackError) {
+        throw new Error('Stream is unavailable or has ended. Please try with a currently live stream.');
+      }
+    }
+    
+    // Check if page loaded successfully
+    const pageTitle = await page.title();
+    if (pageTitle.includes('404') || pageTitle.includes('Not Found')) {
+      throw new Error('Stream not found or has ended. Please add a new live stream URL.');
+    }
     
     // Capture and analyze screenshot
     const screenshot = await page.screenshot({ type: 'jpeg', quality: 60 });
     const screenImageBase64 = screenshot.toString('base64');
-    const screenDescription = await analyzeScreenshot(screenImageBase64);
+    // Screenshot will be analyzed by AI during comment generation
     
     // Generate comment
     const result = await generateAIComment({
       screenImageBase64,
-      screenDescription,
       platform: params.platform,
       style: params.style,
       maxLength: params.maxLength,
       includeEmojis: params.includeEmojis,
     });
     
-    return {
-      ...result,
-      screenDescription,
-    };
+    return result;
     
   } finally {
     if (browser) {
       await browser.close();
     }
+  }
+}
+
+
+/**
+ * Capture and transcribe audio from a stream
+ */
+async function captureAndTranscribeAudio(session: MonitorSession): Promise<void> {
+  if (session.status !== 'running' || !session.page) {
+    return;
+  }
+  
+  const { config } = session;
+  
+  try {
+    console.log(`[StreamMonitor] Capturing audio for session ${session.id}`);
+    
+    // Capture audio from the stream
+    let audioUrl: string | undefined;
+    
+    try {
+      // Try to capture audio using ffmpeg approach
+      const audioResult = await captureStreamAudio({
+        page: session.page,
+        duration: config.audioInterval,
+        streamUrl: config.streamUrl,
+      });
+      
+      audioUrl = audioResult.audioUrl;
+      console.log(`[StreamMonitor] Audio captured: ${audioResult.fileSize} bytes`);
+    } catch (err) {
+      // Fallback: try to capture audio from page context
+      console.warn(`[StreamMonitor] FFmpeg audio capture failed, trying page context:`, err);
+      try {
+        const audioResult = await capturePageContextAudio({
+          page: session.page,
+          duration: Math.min(config.audioInterval, 15), // Shorter capture for page context
+          streamUrl: config.streamUrl,
+        });
+        audioUrl = audioResult.audioUrl;
+        console.log(`[StreamMonitor] Page context audio captured: ${audioResult.fileSize} bytes`);
+      } catch (pageErr) {
+        console.warn(`[StreamMonitor] Page context audio capture also failed:`, pageErr);
+        return;
+      }
+    }
+    
+    if (!audioUrl) {
+      console.warn(`[StreamMonitor] No audio URL available`);
+      return;
+    }
+    
+    // Transcribe the audio
+    const transcription = await transcribeStreamAudio(audioUrl, {
+      language: 'en',
+      prompt: 'Transcribe what the streamer is saying',
+    });
+    
+    if (!transcription || !transcription.text) {
+      console.warn(`[StreamMonitor] No transcription result`);
+      return;
+    }
+    
+    console.log(`[StreamMonitor] Audio transcribed: "${transcription.text.slice(0, 100)}..."`);
+    
+    // Store the transcript for use in next comment generation
+    session.lastAudioTranscript = transcription.text;
+    session.lastAudioTime = new Date();
+    
+    // Detect call-to-action in the transcript
+    const cta = detectCallToAction(transcription.text);
+    if (cta) {
+      console.log(`[StreamMonitor] Detected call-to-action: "${cta}"`);
+    }
+    
+  } catch (error) {
+    console.error(`[StreamMonitor] Failed to capture/transcribe audio:`, error);
+    // Don't throw - audio is optional
   }
 }

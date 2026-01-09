@@ -1,11 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-<<<<<<< HEAD
-  "id": "d55bbd3b-383b-405f-883e-5873de89ff02",
-=======
   "id": "06b76713-11d0-4d93-af7d-62be7363471b",
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
   "prevId": "1cc5debc-1ab5-4e45-9414-47b266188baf",
   "tables": {
     "accounts": {
@@ -54,26 +50,6 @@
           "autoincrement": false,
           "default": 1
         },
-<<<<<<< HEAD
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'CURRENT_TIMESTAMP'"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "onUpdate": true,
-          "default": "(now())"
-        },
-=======
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         "cookieExpiresAt": {
           "name": "cookieExpiresAt",
           "type": "timestamp",
@@ -103,8 +79,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
-<<<<<<< HEAD
-=======
         },
         "createdAt": {
           "name": "createdAt",
@@ -122,7 +96,6 @@
           "autoincrement": false,
           "onUpdate": true,
           "default": "(now())"
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         }
       },
       "indexes": {},
@@ -141,9 +114,6 @@
           "onUpdate": "no action"
         }
       },
-<<<<<<< HEAD
-      "compositePrimaryKeys": {},
-=======
       "compositePrimaryKeys": {
         "accounts_id": {
           "name": "accounts_id",
@@ -152,7 +122,6 @@
           ]
         }
       },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
@@ -201,11 +170,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-<<<<<<< HEAD
-          "default": "'CURRENT_TIMESTAMP'"
-=======
           "default": "(now())"
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         },
         "updatedAt": {
           "name": "updatedAt",
@@ -233,9 +198,6 @@
           "onUpdate": "no action"
         }
       },
-<<<<<<< HEAD
-      "compositePrimaryKeys": {},
-=======
       "compositePrimaryKeys": {
         "commentTemplates_id": {
           "name": "commentTemplates_id",
@@ -244,7 +206,6 @@
           ]
         }
       },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
@@ -322,26 +283,6 @@
           "notNull": false,
           "autoincrement": false
         },
-<<<<<<< HEAD
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'CURRENT_TIMESTAMP'"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "onUpdate": true,
-          "default": "(now())"
-        },
-=======
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         "minDelaySeconds": {
           "name": "minDelaySeconds",
           "type": "int",
@@ -357,8 +298,6 @@
           "notNull": false,
           "autoincrement": false,
           "default": 60
-<<<<<<< HEAD
-=======
         },
         "createdAt": {
           "name": "createdAt",
@@ -376,7 +315,6 @@
           "autoincrement": false,
           "onUpdate": true,
           "default": "(now())"
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         }
       },
       "indexes": {},
@@ -434,9 +372,6 @@
           "onUpdate": "no action"
         }
       },
-<<<<<<< HEAD
-      "compositePrimaryKeys": {},
-=======
       "compositePrimaryKeys": {
         "jobs_id": {
           "name": "jobs_id",
@@ -445,7 +380,6 @@
           ]
         }
       },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
@@ -470,9 +404,6 @@
           "name": "jobId",
           "type": "int",
           "primaryKey": false,
-<<<<<<< HEAD
-          "notNull": true,
-=======
           "notNull": false,
           "autoincrement": false
         },
@@ -488,7 +419,6 @@
           "type": "int",
           "primaryKey": false,
           "notNull": false,
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
           "autoincrement": false
         },
         "platform": {
@@ -498,8 +428,6 @@
           "notNull": true,
           "autoincrement": false
         },
-<<<<<<< HEAD
-=======
         "action": {
           "name": "action",
           "type": "enum('manual_comment','ai_comment','job_comment')",
@@ -508,7 +436,6 @@
           "autoincrement": false,
           "default": "'job_comment'"
         },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         "status": {
           "name": "status",
           "type": "enum('success','failed','skipped')",
@@ -530,8 +457,6 @@
           "notNull": false,
           "autoincrement": false
         },
-<<<<<<< HEAD
-=======
         "metadata": {
           "name": "metadata",
           "type": "text",
@@ -539,18 +464,13 @@
           "notNull": false,
           "autoincrement": false
         },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-<<<<<<< HEAD
-          "default": "'CURRENT_TIMESTAMP'"
-=======
           "default": "(now())"
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         }
       },
       "indexes": {},
@@ -580,11 +500,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-<<<<<<< HEAD
-        }
-      },
-      "compositePrimaryKeys": {},
-=======
         },
         "logs_accountId_accounts_id_fk": {
           "name": "logs_accountId_accounts_id_fk",
@@ -621,7 +536,6 @@
           ]
         }
       },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
@@ -677,11 +591,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-<<<<<<< HEAD
-          "default": "'CURRENT_TIMESTAMP'"
-=======
           "default": "(now())"
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         },
         "updatedAt": {
           "name": "updatedAt",
@@ -698,12 +608,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-<<<<<<< HEAD
-          "default": "'CURRENT_TIMESTAMP'"
-        }
-      },
-      "indexes": {
-=======
           "default": "(now())"
         }
       },
@@ -718,24 +622,13 @@
         }
       },
       "uniqueConstraints": {
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         "users_openId_unique": {
           "name": "users_openId_unique",
           "columns": [
             "openId"
-<<<<<<< HEAD
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-=======
           ]
         }
       },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
       "checkConstraint": {}
     },
     "videos": {
@@ -776,8 +669,6 @@
           "notNull": true,
           "autoincrement": false
         },
-<<<<<<< HEAD
-=======
         "chatId": {
           "name": "chatId",
           "type": "varchar(255)",
@@ -785,7 +676,6 @@
           "notNull": false,
           "autoincrement": false
         },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         "title": {
           "name": "title",
           "type": "varchar(512)",
@@ -807,11 +697,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-<<<<<<< HEAD
-          "default": "'CURRENT_TIMESTAMP'"
-=======
           "default": "(now())"
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         },
         "updatedAt": {
           "name": "updatedAt",
@@ -821,16 +707,6 @@
           "autoincrement": false,
           "onUpdate": true,
           "default": "(now())"
-<<<<<<< HEAD
-        },
-        "chatId": {
-          "name": "chatId",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-=======
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
         }
       },
       "indexes": {},
@@ -849,9 +725,6 @@
           "onUpdate": "no action"
         }
       },
-<<<<<<< HEAD
-      "compositePrimaryKeys": {},
-=======
       "compositePrimaryKeys": {
         "videos_id": {
           "name": "videos_id",
@@ -860,7 +733,6 @@
           ]
         }
       },
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
       "uniqueConstraints": {},
       "checkConstraint": {}
     }

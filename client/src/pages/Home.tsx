@@ -9,23 +9,30 @@ import { Streamdown } from 'streamdown';
  * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
  */
 export default function Home() {
-  // The userAuth hooks provides authentication state
-  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
+  const { user, loading } = useAuth();
 
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin h-8 w-8" />
+      </div>
+    );
+  }
 
+  // If user is authenticated, the Router will redirect to /dashboard via useEffect
+  // This page is only shown to unauthenticated users
   return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="text-center space-y-6 p-8">
+        <h1 className="text-4xl font-bold text-gray-900">Comment Bot MVP</h1>
+        <p className="text-lg text-gray-600">AI-powered comment automation for live streams</p>
+        <Button 
+          size="lg"
+          onClick={() => window.location.href = getLoginUrl()}
+        >
+          Sign In to Continue
+        </Button>
+      </div>
     </div>
   );
 }

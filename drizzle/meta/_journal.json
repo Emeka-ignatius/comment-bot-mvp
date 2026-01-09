@@ -40,13 +40,8 @@
     {
       "idx": 5,
       "version": "5",
-<<<<<<< HEAD
-      "when": 1767373105364,
-      "tag": "0005_calm_king_cobra",
-=======
       "when": 1767407674536,
       "tag": "0005_tranquil_carnage",
->>>>>>> ece3f0dca5c556d925e9b951412f11f5b7bd333e
       "breakpoints": true
     }
   ]

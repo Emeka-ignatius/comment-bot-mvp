@@ -2,6 +2,7 @@ import type { CreateExpressContextOptions } from "@trpc/server/adapters/express"
 import { users } from "../../drizzle/schema";
 import type { InferSelectModel } from "drizzle-orm";
 import { sdk } from "./sdk";
+import { getLocalDevUser } from "./localDevAuth";
 
 type User = InferSelectModel<typeof users>;
 
@@ -15,6 +16,17 @@ export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
   let user: User | null = null;
+
+  // Check for local dev mode first
+  const localDevUser = getLocalDevUser();
+  if (localDevUser) {
+    console.log('[Context] Using local dev user (LOCAL_DEV_MODE=true)');
+    return {
+      req: opts.req,
+      res: opts.res,
+      user: localDevUser,
+    };
+  }
 
   try {
     user = await sdk.authenticateRequest(opts.req);

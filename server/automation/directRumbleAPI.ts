@@ -45,7 +45,8 @@ export async function postRumbleCommentDirect(
   chatId: string,
   comment: string,
   cookieString: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; timestamp?: number }> {
+  const startTime = Date.now();
   try {
     const chatUrl = `https://web7.rumble.com/chat/api/chat/${chatId}/message`;
     
@@ -73,7 +74,7 @@ export async function postRumbleCommentDirect(
         'Referer': 'https://rumble.com/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
       },
-      timeout: 30000, // 30 second timeout
+      timeout: 10000, // Reduced to 10 seconds for faster feedback
     });
     
     console.log('[Rumble Direct API] Success:', response.data);

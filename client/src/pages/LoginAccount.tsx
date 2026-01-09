@@ -176,25 +176,36 @@ export default function LoginAccount() {
         )}
 
         {/* Edit Account Modal */}
+<<<<<<< HEAD
         <Dialog
           open={!!editAccount}
           onOpenChange={open => !open && closeEditModal()}
         >
           <DialogContent className="sm:max-w-[500px]">
+=======
+        <Dialog open={!!editAccount} onOpenChange={(open) => !open && closeEditModal()}>
+          <DialogContent className="w-[95vw] sm:w-full sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+>>>>>>> 9c57e2a9172e1d93d8c462aa11d779c304b22560
             <DialogHeader>
               <DialogTitle>Edit Account</DialogTitle>
               <DialogDescription>
                 Update account name or refresh cookies
               </DialogDescription>
             </DialogHeader>
+<<<<<<< HEAD
 
             <div className="space-y-4 py-4">
+=======
+            
+            <div className="space-y-4 py-4 overflow-y-auto max-h-[calc(90vh-180px)]">
+>>>>>>> 9c57e2a9172e1d93d8c462aa11d779c304b22560
               <div className="space-y-2">
-                <label className="text-sm font-medium">Account Name</label>
+                <label className="text-xs sm:text-sm font-medium">Account Name</label>
                 <Input
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
                   placeholder="Account name"
+                  className="text-sm"
                 />
               </div>
 
@@ -207,16 +218,20 @@ export default function LoginAccount() {
                     onChange={e => setUpdateCookies(e.target.checked)}
                     className="rounded"
                   />
+<<<<<<< HEAD
                   <label
                     htmlFor="updateCookies"
                     className="text-sm font-medium cursor-pointer"
                   >
+=======
+                  <label htmlFor="updateCookies" className="text-xs sm:text-sm font-medium cursor-pointer">
+>>>>>>> 9c57e2a9172e1d93d8c462aa11d779c304b22560
                     Update cookies (refresh session)
                   </label>
                 </div>
 
                 {updateCookies && (
-                  <div className="space-y-2 mt-3 p-3 bg-muted rounded-lg">
+                  <div className="space-y-2 mt-3 p-2 sm:p-3 bg-muted rounded-lg">
                     <p className="text-xs text-muted-foreground">
                       Paste new cookies from Cookie-Editor extension (Export →
                       Header String)
@@ -225,24 +240,29 @@ export default function LoginAccount() {
                       value={editCookies}
                       onChange={e => setEditCookies(e.target.value)}
                       placeholder="Paste new cookies here..."
-                      rows={4}
-                      className="font-mono text-xs"
+                      rows={3}
+                      className="font-mono text-xs resize-none overflow-auto max-h-[150px] w-full break-all"
                     />
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={closeEditModal}>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 justify-end">
+              <Button variant="outline" onClick={closeEditModal} className="w-full sm:w-auto">
                 Cancel
               </Button>
               <Button
                 onClick={handleUpdate}
+<<<<<<< HEAD
                 disabled={
                   updateMutation.isPending ||
                   (updateCookies && !editCookies.trim())
                 }
+=======
+                disabled={updateMutation.isPending || (updateCookies && !editCookies.trim())}
+                className="w-full sm:w-auto"
+>>>>>>> 9c57e2a9172e1d93d8c462aa11d779c304b22560
               >
                 {updateMutation.isPending ? (
                   <Loader2 className="animate-spin mr-2" size={16} />

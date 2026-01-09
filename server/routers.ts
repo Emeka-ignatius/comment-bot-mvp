@@ -46,6 +46,11 @@ import {
 } from "./automation/streamMonitor";
 import { type CommentStyle } from "./automation/aiCommentGenerator";
 import { generateAIComment } from "./automation/aiCommentGenerator";
+import {
+  transcribeStreamAudio,
+  extractKeyPhrases,
+  detectCallToAction,
+} from "./automation/audioTranscriber";
 
 export const appRouter = router({
   system: systemRouter,
@@ -433,6 +438,8 @@ export const appRouter = router({
           includeEmojis: z.boolean(),
           maxCommentLength: z.number().min(10).max(500),
           accountIds: z.array(z.number()),
+          audioEnabled: z.boolean().optional().default(true),
+          audioInterval: z.number().min(15).max(120).optional().default(30),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -454,7 +461,8 @@ export const appRouter = router({
           commentInterval: input.commentInterval,
           includeEmojis: input.includeEmojis,
           maxCommentLength: input.maxCommentLength,
-          audioEnabled: false, // Audio handled separately via frontend
+          audioEnabled: input.audioEnabled,
+          audioInterval: input.audioInterval,
           accountIds: input.accountIds,
         });
 
