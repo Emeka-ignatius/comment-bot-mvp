@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { randomUUID } from 'crypto';
+import { proxyRotation } from './proxyRotation';
 
 /**
  * Generate a random username from a predefined list

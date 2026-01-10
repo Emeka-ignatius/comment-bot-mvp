@@ -321,7 +321,7 @@ export const appRouter = router({
     // Start monitoring a stream with AI comments
     startMonitor: protectedProcedure.input(z.object({
       videoId: z.number(),
-      commentStyle: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional']),
+      commentStyle: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional', 'hype', 'question', 'agreement']),
       commentInterval: z.number().min(30).max(600), // 30 seconds to 10 minutes
       includeEmojis: z.boolean(),
       maxCommentLength: z.number().min(10).max(500),
@@ -399,7 +399,7 @@ export const appRouter = router({
     // Preview a comment without posting
     preview: protectedProcedure.input(z.object({
       videoId: z.number(),
-      style: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional']),
+      style: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional', 'hype', 'question', 'agreement']),
       includeEmojis: z.boolean(),
       maxLength: z.number(),
     })).mutation(async ({ ctx, input }) => {
@@ -425,7 +425,7 @@ export const appRouter = router({
       streamerName: z.string().optional(),
       audioTranscript: z.string().optional(),
       screenDescription: z.string().optional(),
-      style: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional']),
+      style: z.enum(['engaging', 'supportive', 'curious', 'casual', 'professional', 'hype', 'question', 'agreement']),
       includeEmojis: z.boolean(),
       maxLength: z.number(),
     })).mutation(async ({ ctx, input }) => {

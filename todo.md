@@ -367,3 +367,24 @@
 - [x] Added 8 extraction methods to find chat ID in various formats
 - [x] Added better error handling and logging
 - [ ] Test with new video to verify fix works
+
+
+## Live Stream Issues (Jan 9, 2026)
+
+### Critical Issues
+- [ ] Rumble detecting bot activity from repeated IP address - account flagged by Rumble team
+- [ ] Playwright executable missing error when running AI Auto-Comment on live
+- [ ] Audio transcription not working (likely mic hardware issue on client end)
+
+### UI/UX Improvements
+- [ ] Add chat ID verification UI before saving video
+- [ ] Reduce min comment length from 50 to 3 characters
+- [ ] Add more comment styles (currently have basic, casual, hype)
+- [ ] Improve existing comment styles to be more dynamic
+- [ ] Show extracted chat ID in video creation confirmation
+
+### IP Proxy Solution
+- [ ] Research iProyal or similar proxy service integration
+- [ ] Implement proxy rotation for comment posting
+- [ ] Add proxy configuration to AI Auto-Comment settings
+- [ ] Test with proxy to verify Rumble doesn't flag as bot

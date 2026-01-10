@@ -11,7 +11,7 @@ import { Loader2, Play, Pause, Square, Sparkles, Eye, MessageSquare, Clock, User
 import { toast } from 'sonner';
 import { useState } from 'react';
 
-type CommentStyle = 'engaging' | 'supportive' | 'curious' | 'casual' | 'professional';
+type CommentStyle = 'engaging' | 'supportive' | 'curious' | 'casual' | 'professional' | 'hype' | 'question' | 'agreement';
 
 interface MonitorSession {
   id: string;
@@ -147,6 +147,9 @@ export default function AIAutoComment() {
     curious: 'Thoughtful questions about the content',
     casual: 'Relaxed, conversational, like chatting with friends',
     professional: 'Informative and respectful, adds value',
+    hype: 'High energy, excited vibes with lots of emojis',
+    question: 'Thought-provoking questions to engage viewers',
+    agreement: 'Validation and consensus with the stream content',
   };
   
 
@@ -294,7 +297,7 @@ export default function AIAutoComment() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(['engaging', 'supportive', 'curious', 'casual', 'professional'] as CommentStyle[]).map((style) => (
+                  {(['engaging', 'supportive', 'curious', 'casual', 'professional', 'hype', 'question', 'agreement'] as CommentStyle[]).map((style) => (
                     <SelectItem key={style} value={style}>
                       <span className="capitalize">{style}</span>
                     </SelectItem>
@@ -346,9 +349,9 @@ export default function AIAutoComment() {
               <Slider
                 value={[maxCommentLength]}
                 onValueChange={([v]) => setMaxCommentLength(v)}
-                min={50}
+                min={3}
                 max={300}
-                step={10}
+                step={1}
               />
             </div>
             

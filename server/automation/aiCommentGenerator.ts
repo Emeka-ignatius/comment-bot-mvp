@@ -14,7 +14,10 @@ export type CommentStyle =
   | 'supportive'    // Positive, encouraging comments
   | 'curious'       // Asking questions about the content
   | 'casual'        // Relaxed, conversational tone
-  | 'professional'; // Formal, informative comments
+  | 'professional'  // Formal, informative comments
+  | 'hype'          // High energy, excited vibes
+  | 'question'      // Thought-provoking questions
+  | 'agreement';    // Validation and consensus
 
 export interface GenerateCommentParams {
   // Context from the stream
@@ -184,6 +187,9 @@ function buildSystemPrompt(opts: {
     curious: "Ask thoughtful questions about what's happening. Show interest in learning more. Use curious emojis like 🤔 ❓ 👀. Ask 'what's next?', 'how did you...?', 'why did you...?'",
     casual: "Be relaxed and conversational. Use casual language like you're chatting with a friend. Use emojis freely 😂 💯 👏. Use slang like 'lol', 'ngl', 'lowkey', 'highkey', 'bet'.",
     professional: "Be formal and informative. Provide constructive feedback or insights. Use professional emojis like 📊 💼 ✅. Use phrases like 'great point', 'well explained', 'impressive work'.",
+    hype: "GO CRAZY! Maximum energy and excitement! Use LOTS of fire emojis and hype language. Say things like LETS GOOOO, BUSSIN FR FR, SLAY, NO CAP, FIRE, GOATED, INSANE. Be LOUD and EXCITED!",
+    question: "Ask engaging, thought-provoking questions that make viewers think. Use emojis like thinking face and question mark. Ask about opinions, predictions, or deeper topics. Make people want to answer.",
+    agreement: "Validate what's happening and show consensus. Use emojis like checkmark and thumbs up. Say things like facts, facts no cap, you right, agreed, exactly, this is it, period.",
   };
   
   let prompt = `You are a helpful assistant that generates natural, contextual comments for ${platform} live streams.
