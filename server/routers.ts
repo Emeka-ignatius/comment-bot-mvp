@@ -135,7 +135,7 @@ export const appRouter = router({
       // Extract chat ID for Rumble videos
       let chatId: string | null = null;
       if (input.platform === 'rumble') {
-        const { extractChatIdFromPage } = await import('./automation/extractChatId.js');
+        const { extractChatIdFromPage } = await import('./automation/extractChatId.ts');
         
         // Get cookies from any existing Rumble account to bypass Cloudflare
         const rumbleAccounts = await getAccountsByUserId(ctx.user.id);
@@ -148,16 +148,15 @@ export const appRouter = router({
           console.log(`[Video Create] No Rumble account found, attempting without cookies`);
         }
         
-        chatId = await extractChatIdFromPage(input.videoUrl, cookies);
-        console.log(`[Video Create] Extracted chat ID for ${input.videoUrl}:`, chatId);
-        
-        // Fallback: Use video ID from URL if page extraction fails
-        if (!chatId) {
-          const videoIdFromUrl = extractChatIdFromUrl(input.videoUrl);
-          if (videoIdFromUrl) {
-            console.log(`[Video Create] Using video ID as fallback chat ID: ${videoIdFromUrl}`);
-            chatId = videoIdFromUrl;
+        try {
+          chatId = await extractChatIdFromPage(input.videoUrl, cookies);
+          console.log(`[Video Create] Extracted chat ID for ${input.videoUrl}:`, chatId);
+          
+          if (!chatId) {
+            console.warn(`[Video Create] WARNING: Chat ID extraction returned null`);
           }
+        } catch (extractError) {
+          console.error(`[Video Create] Error during extraction:`, extractError instanceof Error ? extractError.message : String(extractError));
         }
       }
       

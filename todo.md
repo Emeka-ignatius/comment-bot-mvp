@@ -357,3 +357,13 @@
 - [ ] Test with more emojis and stream lingos
 - [ ] Monitor chat delay and posting speed
 - [ ] Test chat ID extraction with fresh stream
+
+
+## Chat ID Extraction Bug (Jan 9, 2026)
+- [x] Video v742hom storing chatId as "742hom" (video ID) instead of "426427646" (actual chat ID)
+- [x] Extraction methods not finding chat ID in page HTML
+- [x] Fixed import path from .js to .ts
+- [x] Removed fallback that was using video ID instead of actual chat ID
+- [x] Added 8 extraction methods to find chat ID in various formats
+- [x] Added better error handling and logging
+- [ ] Test with new video to verify fix works
