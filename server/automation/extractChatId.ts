@@ -1,8 +1,13 @@
-import { chromium } from 'playwright';
+import axios from 'axios';
 
 /**
- * Extract Chat ID from Rumble video URL
- * Uses Playwright to bypass Cloudflare and extract the actual chat ID
+ * Extract Chat ID from Rumble video page using authenticated account cookies
+ * 
+ * The chat ID is embedded in the page HTML/JavaScript and is different from the video ID.
+ * Example: https://rumble.com/v73mkg8-shakers.html → chat ID: 425684736
+ * 
+ * This function uses account cookies to bypass Cloudflare protection.
+ * Includes retry logic with exponential backoff for reliability.
  */
 
 const chatIdCache = new Map<string, { id: string; timestamp: number }>();
@@ -25,58 +30,52 @@ function setCachedChatId(videoUrl: string, chatId: string): void {
  * Extract chat ID from page HTML using multiple methods
  */
 function extractChatIdFromHTML(html: string): string | null {
-  // Method 1: Look for "video_id" in JSON data
+  // Method 1: Look for "video_id" in JSON data (most reliable)
   const videoIdMatch = html.match(/"video_id"\s*:\s*"?(\d+)"?/);
   if (videoIdMatch?.[1]) {
+    console.log(`[ChatID Extractor] Found via video_id: ${videoIdMatch[1]}`);
     return videoIdMatch[1];
   }
 
-  // Method 2: Look for chatId in window.__INITIAL_STATE__
-  const initialStateMatch = html.match(/__INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
-  if (initialStateMatch) {
-    try {
-      const state = JSON.parse(initialStateMatch[1]);
-      if (state?.video?.id) {
-        return String(state.video.id);
-      }
-    } catch (e) {
-      // Continue to next method
-    }
+  // Method 2: Look for content_id
+  const contentIdMatch = html.match(/"content_id"\s*:\s*"?(\d+)"?/);
+  if (contentIdMatch?.[1]) {
+    console.log(`[ChatID Extractor] Found via content_id: ${contentIdMatch[1]}`);
+    return contentIdMatch[1];
   }
 
-  // Method 3: Look for data-video-id attribute
-  const dataVideoIdMatch = html.match(/data-video-id="(\d+)"/);
-  if (dataVideoIdMatch?.[1]) {
-    return dataVideoIdMatch[1];
-  }
-
-  // Method 4: Look for "chatId" directly
+  // Method 3: Look for chatId directly
   const chatIdMatch = html.match(/"chatId"\s*:\s*"?(\d+)"?/);
   if (chatIdMatch?.[1]) {
+    console.log(`[ChatID Extractor] Found via chatId: ${chatIdMatch[1]}`);
     return chatIdMatch[1];
   }
 
-  // Method 5: Look for content_id
-  const contentIdMatch = html.match(/"content_id"\s*:\s*"?(\d+)"?/);
-  if (contentIdMatch?.[1]) {
-    return contentIdMatch[1];
+  // Method 4: Look for data-video-id attribute
+  const dataVideoIdMatch = html.match(/data-video-id="(\d+)"/);
+  if (dataVideoIdMatch?.[1]) {
+    console.log(`[ChatID Extractor] Found via data-video-id: ${dataVideoIdMatch[1]}`);
+    return dataVideoIdMatch[1];
+  }
+
+  // Method 5: Look for API endpoint with chat ID
+  const apiMatch = html.match(/\/chat\/api\/chat\/(\d+)\//);
+  if (apiMatch?.[1]) {
+    console.log(`[ChatID Extractor] Found via API endpoint: ${apiMatch[1]}`);
+    return apiMatch[1];
   }
 
   // Method 6: Look for hx-vals with video_id (HTMX attribute)
   const htmxMatch = html.match(/hx-vals=["'].*?"video_id"\s*:\s*["'](\d+)["']/i);
   if (htmxMatch?.[1]) {
+    console.log(`[ChatID Extractor] Found via hx-vals: ${htmxMatch[1]}`);
     return htmxMatch[1];
   }
 
-  // Method 7: Look for API endpoint with chat ID
-  const apiMatch = html.match(/\/chat\/api\/chat\/(\d+)\//);
-  if (apiMatch?.[1]) {
-    return apiMatch[1];
-  }
-
-  // Method 8: Look for any large number (6+ digits) in video_id context
+  // Method 7: Look for any large number (6+ digits) in video_id context
   const largeNumberMatch = html.match(/video_id["\s:=]*["']?(\d{6,})/i);
   if (largeNumberMatch?.[1]) {
+    console.log(`[ChatID Extractor] Found via large number pattern: ${largeNumberMatch[1]}`);
     return largeNumberMatch[1];
   }
 
@@ -84,62 +83,113 @@ function extractChatIdFromHTML(html: string): string | null {
 }
 
 /**
- * Extract chat ID using Playwright (handles Cloudflare)
+ * Extract chat ID using authenticated account cookies
  */
-export async function extractChatIdFromPagePlaywright(videoUrl: string): Promise<string | null> {
+export async function extractChatIdFromPage(videoUrl: string, cookieString?: string): Promise<string | null> {
   // Check cache first
   const cached = getCachedChatId(videoUrl);
   if (cached) {
     return cached;
   }
 
-  let browser = null;
-  try {
-    console.log(`[ChatID Extractor] Fetching page with Playwright: ${videoUrl}`);
-    
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+  const MAX_RETRIES = 3;
+  let lastError: Error | null = null;
 
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-    });
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[ChatID Extractor] Fetching page (attempt ${attempt}/${MAX_RETRIES}): ${videoUrl}`);
 
-    const page = await context.newPage();
-    
-    // Set timeout to 30 seconds
-    page.setDefaultTimeout(30000);
-    page.setDefaultNavigationTimeout(30000);
+      // Build headers with cookies if provided
+      const headers: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0',
+      };
 
-    // Navigate to the page
-    await page.goto(videoUrl, { waitUntil: 'domcontentloaded' });
+      if (cookieString) {
+        headers['Cookie'] = cookieString;
+        console.log('[ChatID Extractor] Using authenticated request with account cookies');
+      } else {
+        console.log('[ChatID Extractor] ⚠️ No cookies provided - may hit Cloudflare challenge');
+      }
 
-    // Wait a bit for dynamic content to load
-    await page.waitForTimeout(2000);
+      const response = await axios.get(videoUrl, {
+        headers,
+        timeout: 15000,
+        maxRedirects: 5,
+        validateStatus: () => true, // Accept any status code
+      });
 
-    // Get the page content
-    const html = await page.content();
+      const html = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
 
-    // Extract chat ID from HTML
-    const chatId = extractChatIdFromHTML(html);
+      // Check response status
+      if (response.status !== 200) {
+        console.warn(`[ChatID Extractor] ⚠️ HTTP ${response.status} on attempt ${attempt}`);
+        if (attempt < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          continue;
+        }
+        throw new Error(`HTTP ${response.status} - page not accessible`);
+      }
 
-    if (chatId) {
-      console.log(`[ChatID Extractor] ✅ Found chat ID: ${chatId}`);
-      setCachedChatId(videoUrl, chatId);
-      return chatId;
-    }
+      // Check if we got Cloudflare challenge page
+      if (html.includes('Just a moment') || html.includes('Checking your browser') || html.includes('cf_clearance')) {
+        console.warn(`[ChatID Extractor] ⚠️ Cloudflare challenge detected on attempt ${attempt}`);
+        if (!cookieString) {
+          console.warn('[ChatID Extractor] ⚠️ No cookies provided - cannot bypass Cloudflare');
+        }
+        if (attempt < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          continue;
+        }
+        throw new Error('Cloudflare challenge - need authenticated cookies');
+      }
 
-    console.warn(`[ChatID Extractor] ⚠️ Could not extract chat ID from page`);
-    return null;
-  } catch (error) {
-    console.error(`[ChatID Extractor] Error fetching page:`, error instanceof Error ? error.message : String(error));
-    return null;
-  } finally {
-    if (browser) {
-      await browser.close();
+      console.log('[ChatID Extractor] Page fetched successfully, searching for chat ID...');
+
+      // Extract chat ID from HTML
+      const chatId = extractChatIdFromHTML(html);
+
+      if (chatId) {
+        console.log(`[ChatID Extractor] ✅ Found chat ID: ${chatId}`);
+        setCachedChatId(videoUrl, chatId);
+        return chatId;
+      }
+
+      console.warn(`[ChatID Extractor] ⚠️ Could not find chat ID in page (attempt ${attempt}/${MAX_RETRIES})`);
+      console.log('[ChatID Extractor] HTML length:', html.length);
+
+      if (attempt < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      }
+
+      throw new Error('Chat ID not found in page after all extraction methods');
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[ChatID Extractor] ❌ Error on attempt ${attempt}:`, lastError.message);
+
+      if (attempt < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      }
     }
   }
+
+  console.error('[ChatID Extractor] ❌ Failed to extract chat ID after', MAX_RETRIES, 'attempts');
+  if (lastError) {
+    console.error('[ChatID Extractor] Last error:', lastError.message);
+  }
+
+  return null;
 }
 
 /**
@@ -155,39 +205,12 @@ export function extractVideoIdFromUrl(url: string): string | null {
 }
 
 /**
- * Main function to extract chat ID with fallback
- */
-export async function extractChatId(videoUrl: string): Promise<string | null> {
-  try {
-    // Try Playwright method first (handles Cloudflare)
-    const chatId = await extractChatIdFromPagePlaywright(videoUrl);
-    if (chatId) {
-      return chatId;
-    }
-
-    // Fallback to video ID extraction (not ideal, but better than nothing)
-    console.warn(`[ChatID Extractor] ⚠️ Falling back to video ID extraction`);
-    const videoId = extractVideoIdFromUrl(videoUrl);
-    if (videoId) {
-      console.warn(`[ChatID Extractor] ⚠️ Using video ID as fallback: ${videoId}`);
-      return videoId;
-    }
-
-    console.error(`[ChatID Extractor] ❌ Could not extract any ID from URL`);
-    return null;
-  } catch (error) {
-    console.error(`[ChatID Extractor] Error:`, error instanceof Error ? error.message : String(error));
-    return null;
-  }
-}
-
-/**
  * Clear old cache entries
  */
 export function clearOldCacheEntries(): void {
   const now = Date.now();
   const keysToDelete: string[] = [];
-  
+
   chatIdCache.forEach((value, key) => {
     if (now - value.timestamp > CACHE_TTL) {
       keysToDelete.push(key);
@@ -195,7 +218,7 @@ export function clearOldCacheEntries(): void {
   });
 
   keysToDelete.forEach(key => chatIdCache.delete(key));
-  
+
   if (keysToDelete.length > 0) {
     console.log(`[ChatID Extractor] Cleared ${keysToDelete.length} old cache entries`);
   }
