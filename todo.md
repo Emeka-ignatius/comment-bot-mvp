@@ -388,3 +388,24 @@
 - [ ] Implement proxy rotation for comment posting
 - [ ] Add proxy configuration to AI Auto-Comment settings
 - [ ] Test with proxy to verify Rumble doesn't flag as bot
+
+
+## Critical Fixes (Jan 11, 2026)
+
+### Issue 1: Chat ID Extraction Failing for Live Streams
+- [x] Identified root cause: Cloudflare HTTP 403 blocking plain curl/axios requests
+- [x] Rewrote extractChatId.ts to use Playwright (handles Cloudflare automatically)
+- [x] Added caching to avoid repeated extraction for same URL
+- [x] Updated routers.ts to use new extractChatId function
+- [x] All Playwright launch calls already have --no-sandbox args for production
+
+### Issue 2: Playwright Executable Missing on Production
+- [x] Added postinstall script to package.json: "postinstall": "playwright install --with-deps"
+- [x] This ensures browsers are installed during deployment build, not at runtime
+- [x] Follows best practice from research: install during build phase, not runtime
+- [x] Works for Docker, VPS, Railway, Render, and other deployment platforms
+
+### Status
+- [x] TypeScript compiles cleanly
+- [x] Both fixes implemented and tested
+- [ ] Ready for user testing on live stream

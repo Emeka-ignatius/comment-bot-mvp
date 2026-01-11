@@ -135,21 +135,12 @@ export const appRouter = router({
       // Extract chat ID for Rumble videos
       let chatId: string | null = null;
       if (input.platform === 'rumble') {
-        const { extractChatIdFromPage } = await import('./automation/extractChatId.ts');
+        const { extractChatId } = await import('./automation/extractChatId.ts');
         
-        // Get cookies from any existing Rumble account to bypass Cloudflare
-        const rumbleAccounts = await getAccountsByUserId(ctx.user.id);
-        const rumbleAccount = rumbleAccounts.find(acc => acc.platform === 'rumble');
-        const cookies = rumbleAccount?.cookies || undefined;
-        
-        if (cookies) {
-          console.log(`[Video Create] Using account cookies to bypass Cloudflare`);
-        } else {
-          console.log(`[Video Create] No Rumble account found, attempting without cookies`);
-        }
+        console.log(`[Video Create] Extracting chat ID for ${input.videoUrl}`);
         
         try {
-          chatId = await extractChatIdFromPage(input.videoUrl, cookies);
+          chatId = await extractChatId(input.videoUrl);
           console.log(`[Video Create] Extracted chat ID for ${input.videoUrl}:`, chatId);
           
           if (!chatId) {
