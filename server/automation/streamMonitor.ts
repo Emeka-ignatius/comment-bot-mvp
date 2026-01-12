@@ -224,8 +224,8 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
     
     // Post the comment
     if (config.platform === 'rumble') {
-      await postRumbleCommentDirect(config.chatId, result.comment, account.cookies);
-      console.log(`[StreamMonitor] Posted comment via account: ${account.accountName}`);
+      await postRumbleCommentDirect(config.chatId, result.comment, account.cookies, account.proxy || undefined);
+      console.log(`[StreamMonitor] Posted comment via account: ${account.accountName}${account.proxy ? ' (using proxy)' : ''}`);
     } else {
       // YouTube posting would go here
       console.log(`[StreamMonitor] YouTube posting not yet implemented`);

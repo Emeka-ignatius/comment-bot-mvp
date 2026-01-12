@@ -34,6 +34,7 @@ export const accounts = mysqlTable("accounts", {
   platform: mysqlEnum("platform", ["youtube", "rumble"]).notNull(),
   accountName: varchar("accountName", { length: 255 }).notNull(),
   cookies: text("cookies").notNull(), // JSON stringified cookies
+  proxy: text("proxy"), // Format: protocol://user:pass@host:port
   isActive: int("isActive").default(1).notNull(),
   cookieExpiresAt: timestamp("cookieExpiresAt"),
   lastSuccessfulSubmission: timestamp("lastSuccessfulSubmission"),

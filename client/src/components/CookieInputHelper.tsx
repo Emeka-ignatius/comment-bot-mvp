@@ -7,7 +7,7 @@ import { CheckCircle2, XCircle, Info, ExternalLink, Download } from 'lucide-reac
 
 interface CookieInputHelperProps {
   platform: 'rumble' | 'youtube';
-  onSuccess: (cookies: string, accountName?: string) => void;
+  onSuccess: (cookies: string, accountName?: string, proxy?: string) => void;
   onCancel: () => void;
 }
 
@@ -22,6 +22,7 @@ export function CookieInputHelper({ platform, onSuccess, onCancel }: CookieInput
   const [isOpen, setIsOpen] = useState(true);
   const [cookies, setCookies] = useState('');
   const [accountName, setAccountName] = useState('');
+  const [proxy, setProxy] = useState('');
   const [validationStatus, setValidationStatus] = useState<'idle' | 'valid' | 'invalid' | 'warning'>('idle');
   const [validationMessage, setValidationMessage] = useState('');
   const [step, setStep] = useState<'instructions' | 'paste'>('instructions');
@@ -87,7 +88,7 @@ export function CookieInputHelper({ platform, onSuccess, onCancel }: CookieInput
 
   const handleSave = () => {
     if (validateCookies(cookies)) {
-      onSuccess(cookies.trim(), accountName.trim() || undefined);
+      onSuccess(cookies.trim(), accountName.trim() || undefined, proxy.trim() || undefined);
       setIsOpen(false);
     }
   };
@@ -208,15 +209,27 @@ export function CookieInputHelper({ platform, onSuccess, onCancel }: CookieInput
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Account Name (Optional)</label>
-              <input
-                type="text"
-                placeholder="e.g., My Main Account"
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md bg-background"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Account Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., My Main Account"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Proxy (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="protocol://user:pass@host:port"
+                  value={proxy}
+                  onChange={(e) => setProxy(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">

@@ -85,7 +85,7 @@ function extractChatIdFromHTML(html: string): string | null {
 /**
  * Extract chat ID using authenticated account cookies
  */
-export async function extractChatIdFromPage(videoUrl: string, cookieString?: string): Promise<string | null> {
+export async function extractChatIdFromPage(videoUrl: string, cookieString?: string, proxy?: string): Promise<string | null> {
   // Check cache first
   const cached = getCachedChatId(videoUrl);
   if (cached) {
@@ -121,8 +121,21 @@ export async function extractChatIdFromPage(videoUrl: string, cookieString?: str
         console.log('[ChatID Extractor] ⚠️ No cookies provided - may hit Cloudflare challenge');
       }
 
+      let httpsAgent;
+      if (proxy) {
+        try {
+          const { HttpsProxyAgent } = await import('https-proxy-agent');
+          httpsAgent = new HttpsProxyAgent(proxy);
+          console.log(`[ChatID Extractor] Using proxy: ${proxy.split('@').pop()}`);
+        } catch (e) {
+          console.warn(`[ChatID Extractor] Proxy error: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
       const response = await axios.get(videoUrl, {
         headers,
+        httpsAgent,
+        proxy: false,
         timeout: 15000,
         maxRedirects: 5,
         validateStatus: () => true, // Accept any status code
