@@ -74,9 +74,10 @@ export async function postRumbleComment(
   options: {
     headless?: boolean;
     timeout?: number;
+    proxy?: string; // Format: protocol://user:pass@host:port
   } = {}
 ): Promise<{ success: boolean; error?: string; isLive?: boolean }> {
-  const { headless = true, timeout = 30000 } = options;
+  const { headless = true, timeout = 30000, proxy } = options;
   
   let browser: Browser | null = null;
   let context: BrowserContext | null = null;
@@ -97,9 +98,26 @@ export async function postRumbleComment(
     });
     
     console.log('[Rumble] Creating browser context...');
+    
+    let proxyConfig;
+    if (proxy) {
+      try {
+        const url = new URL(proxy);
+        proxyConfig = {
+          server: `${url.protocol}//${url.host}`,
+          username: url.username || undefined,
+          password: url.password || undefined,
+        };
+        console.log(`[Rumble] Using proxy: ${url.protocol}//${url.host}`);
+      } catch (e) {
+        console.warn(`[Rumble] Invalid proxy URL: ${proxy}`);
+      }
+    }
+
     context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      proxy: proxyConfig,
     });
     
     // Parse and inject cookies

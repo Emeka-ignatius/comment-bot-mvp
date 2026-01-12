@@ -14,6 +14,7 @@ interface EditAccountData {
   id: number;
   accountName: string;
   cookies: string;
+  proxy?: string;
   platform: 'youtube' | 'rumble';
 }
 
@@ -30,6 +31,7 @@ export default function LoginAccount() {
   const [editAccount, setEditAccount] = useState<EditAccountData | null>(null);
   const [editName, setEditName] = useState('');
   const [editCookies, setEditCookies] = useState('');
+  const [editProxy, setEditProxy] = useState('');
   const [updateCookies, setUpdateCookies] = useState(false);
 
   const handleDelete = async (id: number) => {
@@ -48,6 +50,7 @@ export default function LoginAccount() {
     setEditAccount(account);
     setEditName(account.accountName);
     setEditCookies('');
+    setEditProxy(account.proxy || '');
     setUpdateCookies(false);
   };
 
@@ -55,6 +58,7 @@ export default function LoginAccount() {
     setEditAccount(null);
     setEditName('');
     setEditCookies('');
+    setEditProxy('');
     setUpdateCookies(false);
   };
 
@@ -62,13 +66,18 @@ export default function LoginAccount() {
     if (!editAccount) return;
 
     try {
-      const updateData: { id: number; accountName?: string; cookies?: string; cookieExpiresAt?: Date } = {
+      const updateData: { id: number; accountName?: string; cookies?: string; proxy?: string; cookieExpiresAt?: Date } = {
         id: editAccount.id,
       };
 
       // Only update name if changed
       if (editName !== editAccount.accountName) {
         updateData.accountName = editName;
+      }
+
+      // Only update proxy if changed
+      if (editProxy !== (editAccount.proxy || '')) {
+        updateData.proxy = editProxy;
       }
 
       // Only update cookies if user chose to and provided new ones
@@ -132,12 +141,13 @@ export default function LoginAccount() {
         {showCookieHelper && (
           <CookieInputHelper
             platform={selectedPlatform}
-            onSuccess={async (cookies, accountName) => {
+            onSuccess={async (cookies, accountName, proxy) => {
               try {
                 await createMutation.mutateAsync({
                   platform: selectedPlatform,
                   accountName: accountName || `${selectedPlatform} Account`,
                   cookies,
+                  proxy,
                 });
                 toast.success('Account added successfully!');
                 refetch();
@@ -167,6 +177,16 @@ export default function LoginAccount() {
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="Account name"
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs sm:text-sm font-medium">Proxy (Optional)</label>
+                <Input
+                  value={editProxy}
+                  onChange={(e) => setEditProxy(e.target.value)}
+                  placeholder="protocol://user:pass@host:port"
                   className="text-sm"
                 />
               </div>
@@ -267,6 +287,9 @@ export default function LoginAccount() {
                         {account.platform === 'youtube' ? '🎬 YouTube' : '🎥 Rumble'}
                         {daysUntilExpiry !== null && !isExpired && (
                           <span className="ml-2">• {daysUntilExpiry} days remaining</span>
+                        )}
+                        {account.proxy && (
+                          <span className="ml-2">• 🌐 Proxy active</span>
                         )}
                       </p>
                       {account.lastSuccessfulSubmission && (

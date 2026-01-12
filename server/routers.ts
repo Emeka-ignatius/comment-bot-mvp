@@ -64,6 +64,7 @@ export const appRouter = router({
       platform: z.enum(['youtube', 'rumble']),
       accountName: z.string(),
       cookies: z.string(),
+      proxy: z.string().optional(),
       cookieExpiresAt: z.date().optional(),
     })).mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== 'admin') throw new Error('Admin access required');
@@ -83,6 +84,7 @@ export const appRouter = router({
         platform: input.platform,
         accountName: input.accountName,
         cookies: input.cookies,
+        proxy: input.proxy,
         cookieExpiresAt,
       });
     }),
@@ -91,6 +93,7 @@ export const appRouter = router({
       platform: z.enum(['youtube', 'rumble']).optional(),
       accountName: z.string().optional(),
       cookies: z.string().optional(),
+      proxy: z.string().optional(),
       isActive: z.number().optional(),
       cookieExpiresAt: z.date().optional(),
     })).mutation(async ({ ctx, input }) => {
@@ -145,6 +148,7 @@ export const appRouter = router({
           // Find the first active Rumble account with cookies
           const rumbleAccount = rumbleAccounts.find(acc => acc.platform === 'rumble' && acc.isActive === 1 && acc.cookies);
           const cookies = rumbleAccount?.cookies || undefined;
+          const proxy = rumbleAccount?.proxy || undefined;
           
           if (cookies) {
             console.log(`[Video Create] Using account cookies for "${rumbleAccount?.accountName}" to bypass Cloudflare`);
@@ -152,7 +156,7 @@ export const appRouter = router({
             console.warn(`[Video Create] No active Rumble account with cookies found, attempting without cookies`);
           }
           
-          chatId = await extractChatIdFromPage(input.videoUrl, cookies);
+          chatId = await extractChatIdFromPage(input.videoUrl, cookies, proxy);
           console.log(`[Video Create] Extracted chat ID for ${input.videoUrl}:`, chatId);
           
           if (!chatId) {
@@ -204,6 +208,7 @@ export const appRouter = router({
       const rumbleAccounts = await getAccountsByUserId(ctx.user.id);
       const rumbleAccount = rumbleAccounts.find(acc => acc.platform === 'rumble' && acc.isActive === 1 && acc.cookies);
       const cookies = rumbleAccount?.cookies || undefined;
+      const proxy = rumbleAccount?.proxy || undefined;
       
       if (cookies) {
         console.log(`[Video Re-extract] Using account cookies for "${rumbleAccount?.accountName}" to bypass Cloudflare`);
@@ -211,7 +216,7 @@ export const appRouter = router({
         console.warn(`[Video Re-extract] No active Rumble account with cookies found`);
       }
       
-      const chatId = await extractChatIdFromPage(video.videoUrl, cookies);
+      const chatId = await extractChatIdFromPage(video.videoUrl, cookies, proxy);
       console.log(`[Video Re-extract] Extracted chat ID:`, chatId);
       
       if (chatId) {
