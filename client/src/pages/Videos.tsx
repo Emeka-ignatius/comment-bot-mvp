@@ -5,13 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { trpc } from '@/lib/trpc';
 import { useState } from 'react';
-import { Loader2, Trash2, Plus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Trash2, Plus, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Videos() {
   const { data: videos, isLoading, refetch } = trpc.videos.list.useQuery();
   const createMutation = trpc.videos.create.useMutation();
   const deleteMutation = trpc.videos.delete.useMutation();
+  const reExtractMutation = trpc.videos.reExtractChatId.useMutation();
 
   const [formData, setFormData] = useState({
     platform: 'youtube' as 'youtube' | 'rumble',
@@ -136,6 +137,17 @@ export default function Videos() {
       refetch();
     } catch (error) {
       toast.error('Failed to delete video');
+    }
+  };
+
+  const handleReExtract = async (id: number) => {
+    try {
+      toast.info('Re-extracting chat ID...');
+      const result = await reExtractMutation.mutateAsync({ id });
+      toast.success(`Successfully extracted chat ID: ${result.chatId}`);
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to re-extract chat ID');
     }
   };
 
@@ -313,13 +325,30 @@ export default function Videos() {
                       Status: <span className="capitalize">{video.status}</span>
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleDelete(video.id)}
-                    disabled={deleteMutation.isPending}
-                    className="p-2 hover:bg-destructive rounded text-muted-foreground hover:text-destructive-foreground"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex gap-2">
+                    {video.platform === 'rumble' && (
+                      <button
+                        onClick={() => handleReExtract(video.id)}
+                        disabled={reExtractMutation.isPending}
+                        title="Re-extract Chat ID"
+                        className="p-2 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary"
+                      >
+                        {reExtractMutation.isPending && reExtractMutation.variables?.id === video.id ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <RefreshCw size={18} />
+                        )}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(video.id)}
+                      disabled={deleteMutation.isPending}
+                      title="Delete Video"
+                      className="p-2 hover:bg-destructive rounded text-muted-foreground hover:text-destructive-foreground"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
