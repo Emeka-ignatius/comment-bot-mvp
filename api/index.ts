@@ -10,7 +10,7 @@ import { serveStatic, setupVite } from "../server/_core/vite";
 import { startJobQueue } from "../server/automation/jobQueue";
 
 function isPortAvailable(port: number): Promise<boolean> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const server = net.createServer();
     server.listen(port, () => {
       server.close(() => resolve(true));
