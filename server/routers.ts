@@ -77,6 +77,7 @@ export const appRouter = router({
           platform: z.enum(["youtube", "rumble"]),
           accountName: z.string(),
           cookies: z.string(),
+          proxy: z.string().optional(),
           cookieExpiresAt: z.date().optional(),
         })
       )
@@ -98,7 +99,8 @@ export const appRouter = router({
           platform: input.platform,
           accountName: input.accountName,
           cookies: input.cookies,
-          cookieExpiresAt: cookieExpiresAt.toISOString(),
+          proxy: input.proxy,
+          cookieExpiresAt,
         });
       }),
     update: protectedProcedure
@@ -108,6 +110,7 @@ export const appRouter = router({
           platform: z.enum(["youtube", "rumble"]).optional(),
           accountName: z.string().optional(),
           cookies: z.string().optional(),
+          proxy: z.string().optional(),
           isActive: z.number().optional(),
           cookieExpiresAt: z.date().optional(),
         })
@@ -115,11 +118,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== "admin") throw new Error("Admin access required");
         const { id, ...data } = input;
-        const payload: any = { ...data };
-        if (payload.cookieExpiresAt instanceof Date) {
-          payload.cookieExpiresAt = payload.cookieExpiresAt.toISOString();
-        }
-        return updateAccount(id, payload);
+        return updateAccount(id, data);
       }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -171,41 +170,56 @@ export const appRouter = router({
         let chatId: string | null = null;
         if (input.platform === "rumble") {
           const { extractChatIdFromPage } = await import(
-            "./automation/extractChatId.js"
+            "./automation/extractChatId.ts"
           );
 
-          // Get cookies from any existing Rumble account to bypass Cloudflare
-          const rumbleAccounts = await getAccountsByUserId(ctx.user.id);
-          const rumbleAccount = rumbleAccounts.find(
-            acc => acc.platform === "rumble"
-          );
-          const cookies = rumbleAccount?.cookies || undefined;
-
-          if (cookies) {
-            console.log(
-              `[Video Create] Using account cookies to bypass Cloudflare`
-            );
-          } else {
-            console.log(
-              `[Video Create] No Rumble account found, attempting without cookies`
-            );
-          }
-
-          chatId = await extractChatIdFromPage(input.videoUrl, cookies);
           console.log(
-            `[Video Create] Extracted chat ID for ${input.videoUrl}:`,
-            chatId
+            `[Video Create] Extracting chat ID for ${input.videoUrl}`
           );
 
-          // Fallback: Use video ID from URL if page extraction fails
-          if (!chatId) {
-            const videoIdFromUrl = extractChatIdFromUrl(input.videoUrl);
-            if (videoIdFromUrl) {
+          try {
+            // Get cookies from any existing Rumble account to bypass Cloudflare
+            const rumbleAccounts = await getAccountsByUserId(ctx.user.id);
+            // Find the first active Rumble account with cookies
+            const rumbleAccount = rumbleAccounts.find(
+              acc =>
+                acc.platform === "rumble" && acc.isActive === 1 && acc.cookies
+            );
+            const cookies = rumbleAccount?.cookies || undefined;
+            const proxy = rumbleAccount?.proxy || undefined;
+
+            if (cookies) {
               console.log(
-                `[Video Create] Using video ID as fallback chat ID: ${videoIdFromUrl}`
+                `[Video Create] Using account cookies for "${rumbleAccount?.accountName}" to bypass Cloudflare`
               );
-              chatId = videoIdFromUrl;
+            } else {
+              console.warn(
+                `[Video Create] No active Rumble account with cookies found, attempting without cookies`
+              );
             }
+
+            chatId = await extractChatIdFromPage(
+              input.videoUrl,
+              cookies,
+              proxy
+            );
+            console.log(
+              `[Video Create] Extracted chat ID for ${input.videoUrl}:`,
+              chatId
+            );
+
+            if (!chatId) {
+              console.warn(
+                `[Video Create] WARNING: Chat ID extraction returned null`
+              );
+            }
+          } catch (extractError) {
+            console.error(
+              `[Video Create] Error during extraction:`,
+              extractError instanceof Error
+                ? extractError.message
+                : String(extractError)
+            );
           }
         }
 
@@ -241,6 +255,59 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== "admin") throw new Error("Admin access required");
         return deleteVideo(input.id);
+      }),
+    reExtractChatId: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+
+        const videos = await getVideosByUserId(ctx.user.id);
+        const video = videos.find(v => v.id === input.id);
+        if (!video) throw new Error("Video not found");
+        if (video.platform !== "rumble")
+          throw new Error("Re-extraction only supported for Rumble");
+
+        const { extractChatIdFromPage } = await import(
+          "./automation/extractChatId.ts"
+        );
+
+        console.log(
+          `[Video Re-extract] Re-extracting chat ID for ${video.videoUrl}`
+        );
+
+        // Get cookies from any existing Rumble account to bypass Cloudflare
+        const rumbleAccounts = await getAccountsByUserId(ctx.user.id);
+        const rumbleAccount = rumbleAccounts.find(
+          acc => acc.platform === "rumble" && acc.isActive === 1 && acc.cookies
+        );
+        const cookies = rumbleAccount?.cookies || undefined;
+        const proxy = rumbleAccount?.proxy || undefined;
+
+        if (cookies) {
+          console.log(
+            `[Video Re-extract] Using account cookies for "${rumbleAccount?.accountName}" to bypass Cloudflare`
+          );
+        } else {
+          console.warn(
+            `[Video Re-extract] No active Rumble account with cookies found`
+          );
+        }
+
+        const chatId = await extractChatIdFromPage(
+          video.videoUrl,
+          cookies,
+          proxy
+        );
+        console.log(`[Video Re-extract] Extracted chat ID:`, chatId);
+
+        if (chatId) {
+          await updateVideo(input.id, { chatId });
+          return { success: true, chatId };
+        } else {
+          throw new Error(
+            "Failed to extract chat ID. Please ensure you have an active Rumble account with valid cookies."
+          );
+        }
       }),
   }),
 
@@ -433,6 +500,9 @@ export const appRouter = router({
             "curious",
             "casual",
             "professional",
+            "hype",
+            "question",
+            "agreement",
           ]),
           commentInterval: z.number().min(30).max(600), // 30 seconds to 10 minutes
           includeEmojis: z.boolean(),
@@ -537,6 +607,9 @@ export const appRouter = router({
             "curious",
             "casual",
             "professional",
+            "hype",
+            "question",
+            "agreement",
           ]),
           includeEmojis: z.boolean(),
           maxLength: z.number(),
@@ -573,6 +646,9 @@ export const appRouter = router({
             "curious",
             "casual",
             "professional",
+            "hype",
+            "question",
+            "agreement",
           ]),
           includeEmojis: z.boolean(),
           maxLength: z.number(),

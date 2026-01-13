@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { randomUUID } from 'crypto';
+import { proxyRotation } from './proxyRotation';
 
 /**
  * Generate a random username from a predefined list
@@ -44,7 +45,8 @@ function getNextUsername(): string {
 export async function postRumbleCommentDirect(
   chatId: string,
   comment: string,
-  cookieString: string
+  cookieString: string,
+  proxy?: string // Format: protocol://user:pass@host:port
 ): Promise<{ success: boolean; error?: string; timestamp?: number }> {
   const startTime = Date.now();
   try {
@@ -66,6 +68,17 @@ export async function postRumbleCommentDirect(
     console.log(`[Rumble Direct API] Posting to: ${chatUrl}`);
     console.log(`[Rumble Direct API] Comment as ${username}: ${comment}`);
     
+    let httpsAgent;
+    if (proxy) {
+      try {
+        const { HttpsProxyAgent } = await import('https-proxy-agent');
+        httpsAgent = new HttpsProxyAgent(proxy);
+        console.log(`[Rumble Direct API] Using proxy: ${proxy.split('@').pop()}`);
+      } catch (e) {
+        console.warn(`[Rumble Direct API] Proxy error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
     const response = await axios.post(chatUrl, payload, {
       headers: {
         'Content-Type': 'application/json',
@@ -74,6 +87,8 @@ export async function postRumbleCommentDirect(
         'Referer': 'https://rumble.com/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
       },
+      httpsAgent,
+      proxy: false, // Disable default axios proxy handling when using agent
       timeout: 10000, // Reduced to 10 seconds for faster feedback
     });
     

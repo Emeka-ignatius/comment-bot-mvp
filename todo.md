@@ -357,3 +357,55 @@
 - [ ] Test with more emojis and stream lingos
 - [ ] Monitor chat delay and posting speed
 - [ ] Test chat ID extraction with fresh stream
+
+
+## Chat ID Extraction Bug (Jan 9, 2026)
+- [x] Video v742hom storing chatId as "742hom" (video ID) instead of "426427646" (actual chat ID)
+- [x] Extraction methods not finding chat ID in page HTML
+- [x] Fixed import path from .js to .ts
+- [x] Removed fallback that was using video ID instead of actual chat ID
+- [x] Added 8 extraction methods to find chat ID in various formats
+- [x] Added better error handling and logging
+- [ ] Test with new video to verify fix works
+
+
+## Live Stream Issues (Jan 9, 2026)
+
+### Critical Issues
+- [ ] Rumble detecting bot activity from repeated IP address - account flagged by Rumble team
+- [ ] Playwright executable missing error when running AI Auto-Comment on live
+- [ ] Audio transcription not working (likely mic hardware issue on client end)
+
+### UI/UX Improvements
+- [ ] Add chat ID verification UI before saving video
+- [ ] Reduce min comment length from 50 to 3 characters
+- [ ] Add more comment styles (currently have basic, casual, hype)
+- [ ] Improve existing comment styles to be more dynamic
+- [ ] Show extracted chat ID in video creation confirmation
+
+### IP Proxy Solution
+- [ ] Research iProyal or similar proxy service integration
+- [ ] Implement proxy rotation for comment posting
+- [ ] Add proxy configuration to AI Auto-Comment settings
+- [ ] Test with proxy to verify Rumble doesn't flag as bot
+
+
+## Critical Fixes (Jan 11, 2026)
+
+### Issue 1: Chat ID Extraction Failing for Live Streams
+- [x] Identified root cause: Cloudflare HTTP 403 blocking plain curl/axios requests
+- [x] Rewrote extractChatId.ts to use Playwright (handles Cloudflare automatically)
+- [x] Added caching to avoid repeated extraction for same URL
+- [x] Updated routers.ts to use new extractChatId function
+- [x] All Playwright launch calls already have --no-sandbox args for production
+
+### Issue 2: Playwright Executable Missing on Production
+- [x] Added postinstall script to package.json: "postinstall": "playwright install --with-deps"
+- [x] This ensures browsers are installed during deployment build, not at runtime
+- [x] Follows best practice from research: install during build phase, not runtime
+- [x] Works for Docker, VPS, Railway, Render, and other deployment platforms
+
+### Status
+- [x] TypeScript compiles cleanly
+- [x] Both fixes implemented and tested
+- [ ] Ready for user testing on live stream
