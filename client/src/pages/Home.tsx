@@ -10,6 +10,13 @@ import { Streamdown } from 'streamdown';
  */
 export default function Home() {
   const { user, loading } = useAuth();
+  
+  // Check if we're in local dev mode (localhost)
+  const isLocalhost = typeof window !== "undefined" && (
+    window.location.hostname === "localhost" || 
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname === ""
+  );
 
   if (loading) {
     return (
@@ -21,17 +28,29 @@ export default function Home() {
 
   // If user is authenticated, the Router will redirect to /dashboard via useEffect
   // This page is only shown to unauthenticated users
+  // In local dev mode, show a message indicating mock authentication
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="text-center space-y-6 p-8">
         <h1 className="text-4xl font-bold text-gray-900">Comment Bot MVP</h1>
         <p className="text-lg text-gray-600">AI-powered comment automation for live streams</p>
-        <Button 
-          size="lg"
-          onClick={() => window.location.href = getLoginUrl()}
-        >
-          Sign In to Continue
-        </Button>
+        {isLocalhost ? (
+          <div className="space-y-2">
+            <p className="text-sm text-gray-500">
+              Local Dev Mode: Authentication is bypassed
+            </p>
+            <p className="text-sm text-gray-500">
+              You will be automatically logged in as "Local Dev User"
+            </p>
+          </div>
+        ) : (
+          <Button 
+            size="lg"
+            onClick={() => window.location.href = getLoginUrl()}
+          >
+            Sign In to Continue
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -40,5 +40,13 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    // Proxy API requests to Express server when running standalone
+    proxy: {
+      "/api": {
+        target: process.env.VITE_BACKEND_URL || "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 });

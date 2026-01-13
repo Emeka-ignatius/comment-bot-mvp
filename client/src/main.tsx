@@ -14,6 +14,17 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
+  // Skip OAuth redirect in local dev mode (localhost)
+  // In local dev mode, the backend returns a mock user automatically
+  const isLocalhost = window.location.hostname === "localhost" || 
+                      window.location.hostname === "127.0.0.1" ||
+                      window.location.hostname === "";
+  
+  if (isLocalhost) {
+    console.log('[Local Dev] Skipping OAuth redirect - using mock user');
+    return;
+  }
+
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
 
   if (!isUnauthorized) return;

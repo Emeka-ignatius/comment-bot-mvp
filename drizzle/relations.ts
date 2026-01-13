@@ -7,6 +7,7 @@ export const accountsRelations = relations(accounts, ({one, many}) => ({
 		references: [users.id]
 	}),
 	jobs: many(jobs),
+	logs: many(logs),
 }));
 
 export const usersRelations = relations(users, ({many}) => ({
@@ -47,6 +48,7 @@ export const jobsRelations = relations(jobs, ({one, many}) => ({
 
 export const videosRelations = relations(videos, ({one, many}) => ({
 	jobs: many(jobs),
+	logs: many(logs),
 	user: one(users, {
 		fields: [videos.userId],
 		references: [users.id]
@@ -61,5 +63,13 @@ export const logsRelations = relations(logs, ({one}) => ({
 	job: one(jobs, {
 		fields: [logs.jobId],
 		references: [jobs.id]
+	}),
+	account: one(accounts, {
+		fields: [logs.accountId],
+		references: [accounts.id]
+	}),
+	video: one(videos, {
+		fields: [logs.videoId],
+		references: [videos.id]
 	}),
 }));
