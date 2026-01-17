@@ -71,6 +71,44 @@ const execFile = async (
   });
 };
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const isRetryableSpawnError = (err: unknown) => {
+  const e = err as any;
+  const code = typeof e?.code === 'string' ? e.code : '';
+  const msg = typeof e?.message === 'string' ? e.message : '';
+  return (
+    code === 'EBUSY' ||
+    code === 'ETXTBSY' ||
+    code === 'EPERM' ||
+    msg.includes('spawn EBUSY') ||
+    msg.includes('spawn ETXTBSY')
+  );
+};
+
+const execFileWithRetries = async (
+  file: string,
+  args: string[],
+  options?: { timeoutMs?: number; retries?: number; retryDelayMs?: number }
+): Promise<{ stdout: string; stderr: string }> => {
+  const retries = options?.retries ?? 2;
+  const retryDelayMs = options?.retryDelayMs ?? 400;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await execFile(file, args, { timeoutMs: options?.timeoutMs });
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries && isRetryableSpawnError(err)) {
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+};
+
 export interface AudioCaptureConfig {
   page: Page;
   duration: number;        // How long to capture (in seconds)
@@ -116,10 +154,11 @@ async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
       await YTDlpWrap.downloadFromGithub(binPath);
     }
 
-    const { stdout } = await execFile(
+    const { stdout } = await execFileWithRetries(
       binPath,
-      ['-g', '-f', 'bestaudio', '--no-playlist', '--no-warnings', streamUrl],
-      { timeoutMs: 45_000 }
+      // Prefer audio-only, but fall back to combined streams when needed.
+      ['-g', '-f', 'bestaudio/best', '--no-playlist', '--no-warnings', streamUrl],
+      { timeoutMs: 45_000, retries: 2, retryDelayMs: 400 }
     );
     const url = stdout
       .split(/\r?\n/)
@@ -137,10 +176,10 @@ async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
   }
 
   // Fallback: system yt-dlp if present
-  const { stdout } = await execFile(
+  const { stdout } = await execFileWithRetries(
     'yt-dlp',
-    ['-g', '-f', 'bestaudio', '--no-playlist', '--no-warnings', streamUrl],
-    { timeoutMs: 45_000 }
+    ['-g', '-f', 'bestaudio/best', '--no-playlist', '--no-warnings', streamUrl],
+    { timeoutMs: 45_000, retries: 2, retryDelayMs: 400 }
   );
   const url = stdout
     .split(/\r?\n/)

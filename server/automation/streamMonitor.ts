@@ -41,6 +41,7 @@ export interface MonitorSession {
   page?: Page;
   intervalId?: NodeJS.Timeout;
   audioIntervalId?: NodeJS.Timeout;
+  audioCaptureInProgress?: boolean;
   lastComment?: string;
   lastCommentTime?: Date;
   lastAudioTranscript?: string;
@@ -458,6 +459,12 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
   if (session.status !== 'running' || !session.page) {
     return;
   }
+
+  // Prevent overlapping audio captures (common on Windows and for slow streams).
+  if (session.audioCaptureInProgress) {
+    return;
+  }
+  session.audioCaptureInProgress = true;
   
   const { config } = session;
   
@@ -537,5 +544,7 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
   } catch (error) {
     console.error(`[StreamMonitor] Failed to capture/transcribe audio:`, error);
     // Don't throw - audio is optional
+  } finally {
+    session.audioCaptureInProgress = false;
   }
 }
