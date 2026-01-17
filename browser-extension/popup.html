@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connect Rumble</title>
+    <style>
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        margin: 0;
+        padding: 12px;
+        width: 360px;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        margin: 10px 0 6px;
+      }
+      input,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        font-size: 12px;
+      }
+      textarea {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        resize: vertical;
+        min-height: 60px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      button {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        background: #111827;
+        color: #fff;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      button.secondary {
+        background: #fff;
+        color: #111827;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .hint {
+        margin-top: 8px;
+        font-size: 11px;
+        color: #57606a;
+      }
+      a {
+        color: #0969da;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <div style="font-weight: 700; font-size: 14px">Connect Rumble</div>
+      <div class="hint">
+        Log in to Rumble in your browser first, then paste the token from the app.
+      </div>
+
+      <label for="apiBase">App URL (base)</label>
+      <input id="apiBase" placeholder="https://your-app-domain.com" />
+
+      <label for="token">Connect Token</label>
+      <textarea id="token" placeholder="Paste token from the app"></textarea>
+
+      <label for="accountName">Account Name (optional)</label>
+      <input id="accountName" placeholder="e.g., My Main Rumble" />
+
+      <label for="cookieStore">Cookie Store</label>
+      <select id="cookieStore" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 12px;">
+        <option value="">Loading…</option>
+      </select>
+
+      <div class="row">
+        <button id="capture">Capture &amp; Send</button>
+        <button id="save" class="secondary">Save</button>
+      </div>
+
+      <div id="status" class="status"></div>
+      <div class="hint">
+        Need to login? <a id="loginLink" href="#">Open Rumble login</a>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
+

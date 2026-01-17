@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { batchJobsRouter } from "./routers/batchJobs";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
 import {
   getAccountsByUserId,
   createAccount,
@@ -51,6 +52,94 @@ import {
   extractKeyPhrases,
   detectCallToAction,
 } from "./automation/audioTranscriber";
+
+/**
+ * Convert cookies from JSON format to cookie string format if needed
+ * Handles both formats:
+ * - Cookie string: "name=value; name2=value2"
+ * - JSON array: [{"name": "cookie1", "value": "value1"}, ...]
+ */
+function formatCookiesForRequest(cookieInput: string): string {
+  if (!cookieInput || !cookieInput.trim()) {
+    return "";
+  }
+
+  // Try to parse as JSON first
+  try {
+    const parsed = JSON.parse(cookieInput);
+    if (Array.isArray(parsed)) {
+      // Convert JSON array to cookie string
+      return parsed
+        .map((cookie: any) => {
+          const name = cookie.name || cookie.Name;
+          const value = cookie.value || cookie.Value;
+          return name && value ? `${name}=${value}` : null;
+        })
+        .filter((cookie: string | null) => cookie !== null)
+        .join("; ");
+    }
+    if (typeof parsed === "object" && parsed !== null) {
+      // Single cookie object
+      const name = parsed.name || parsed.Name;
+      const value = parsed.value || parsed.Value;
+      return name && value ? `${name}=${value}` : "";
+    }
+  } catch {
+    // Not JSON, assume it's already in cookie string format
+  }
+
+  // Return as-is if it's already a cookie string
+  return cookieInput.trim();
+}
+
+type ConnectTokenRecord = {
+  userId: number;
+  platform: "rumble" | "youtube";
+  accountName?: string;
+  createdAtMs: number;
+  expiresAtMs: number;
+  usedAtMs?: number;
+};
+
+// In-memory token store (single instance). For multi-replica deploys, move to DB/Redis.
+const CONNECT_TOKEN_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const connectTokens = new Map<string, ConnectTokenRecord>();
+
+function createConnectToken(): string {
+  return randomBytes(24).toString("base64url");
+}
+
+function getCookieNames(cookieString: string): Set<string> {
+  const names = new Set<string>();
+  const parts = cookieString
+    .split(";")
+    .map(p => p.trim())
+    .filter(Boolean);
+  for (const part of parts) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx <= 0) continue;
+    names.add(part.slice(0, eqIdx).trim());
+  }
+  return names;
+}
+
+function validateRumbleCookies(cookieString: string): { ok: boolean; reason?: string } {
+  const trimmed = cookieString.trim();
+  if (!trimmed) return { ok: false, reason: "Empty cookie string" };
+
+  const names = getCookieNames(trimmed);
+  if (names.size === 0) return { ok: false, reason: "No cookies found" };
+
+  // Cloudflare cookies alone are not sufficient.
+  const nonCf = Array.from(names).filter(
+    n => !n.startsWith("__cf") && !n.startsWith("_cf")
+  );
+  if (nonCf.length === 0) {
+    return { ok: false, reason: "Only Cloudflare cookies found" };
+  }
+
+  return { ok: true };
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -103,6 +192,96 @@ export const appRouter = router({
           cookieExpiresAt,
         });
       }),
+    connectInit: protectedProcedure
+      .input(
+        z.object({
+          platform: z.enum(["rumble", "youtube"]),
+          accountName: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+
+        const token = createConnectToken();
+        const now = Date.now();
+        const expiresAtMs = now + CONNECT_TOKEN_TTL_MS;
+
+        connectTokens.set(token, {
+          userId: ctx.user.id,
+          platform: input.platform,
+          accountName: input.accountName,
+          createdAtMs: now,
+          expiresAtMs,
+        });
+
+        return {
+          connectToken: token,
+          expiresAt: new Date(expiresAtMs),
+          platform: input.platform,
+          accountName: input.accountName ?? null,
+        } as const;
+      }),
+    connectComplete: publicProcedure
+      .input(
+        z.object({
+          connectToken: z.string().min(10),
+          platform: z.enum(["rumble", "youtube"]),
+          accountName: z.string().optional(),
+          cookies: z.string().min(1),
+          proxy: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const record = connectTokens.get(input.connectToken);
+        if (!record) throw new Error("Invalid or expired connect token");
+
+        const now = Date.now();
+        if (record.usedAtMs) throw new Error("Connect token already used");
+        if (now > record.expiresAtMs) {
+          connectTokens.delete(input.connectToken);
+          throw new Error("Connect token expired");
+        }
+
+        if (record.platform !== input.platform) {
+          throw new Error("Connect token platform mismatch");
+        }
+
+        const cookieString = formatCookiesForRequest(input.cookies);
+        if (record.platform === "rumble") {
+          const v = validateRumbleCookies(cookieString);
+          if (!v.ok) throw new Error(`Invalid Rumble cookies: ${v.reason}`);
+        } else {
+          // Minimal validation for youtube: require at least one cookie.
+          const names = getCookieNames(cookieString);
+          if (names.size === 0) throw new Error("Invalid YouTube cookies");
+        }
+
+        // Mark token used (single-use)
+        record.usedAtMs = now;
+        connectTokens.set(input.connectToken, record);
+
+        const accountName =
+          input.accountName?.trim() ||
+          record.accountName?.trim() ||
+          `${record.platform} Account`;
+
+        const expirationDate = new Date();
+        expirationDate.setDate(expirationDate.getDate() + 30);
+
+        await createAccount({
+          userId: record.userId,
+          platform: record.platform,
+          accountName,
+          cookies: cookieString,
+          proxy: input.proxy,
+          cookieExpiresAt: expirationDate,
+        });
+
+        // Optionally cleanup token after success
+        connectTokens.delete(input.connectToken);
+
+        return { success: true } as const;
+      }),
     update: protectedProcedure
       .input(
         z.object({
@@ -111,7 +290,7 @@ export const appRouter = router({
           accountName: z.string().optional(),
           cookies: z.string().optional(),
           proxy: z.string().optional(),
-          isActive: z.number().optional(),
+          isActive: z.boolean().optional(),
           cookieExpiresAt: z.date().optional(),
         })
       )
@@ -180,21 +359,44 @@ export const appRouter = router({
           try {
             // Get cookies from any existing Rumble account to bypass Cloudflare
             const rumbleAccounts = await getAccountsByUserId(ctx.user.id);
+            console.log(`[Video Create] Found ${rumbleAccounts.length} total accounts for user`);
+            
             // Find the first active Rumble account with cookies
             const rumbleAccount = rumbleAccounts.find(
-              acc =>
-                acc.platform === "rumble" && acc.isActive === 1 && acc.cookies
+              acc => {
+                const isRumble = acc.platform === "rumble";
+                const isActive = acc.isActive === true; // Fix: isActive is boolean, not number
+                const hasCookies = acc.cookies && acc.cookies.trim().length > 0;
+                
+                if (isRumble) {
+                  console.log(`[Video Create] Checking account "${acc.accountName}": isActive=${acc.isActive}, hasCookies=${hasCookies}`);
+                }
+                
+                return isRumble && isActive && hasCookies;
+              }
             );
-            const cookies = rumbleAccount?.cookies || undefined;
+            
+            // Convert cookies from JSON format to cookie string if needed
+            let cookies: string | undefined = undefined;
+            if (rumbleAccount?.cookies) {
+              cookies = formatCookiesForRequest(rumbleAccount.cookies);
+            }
             const proxy = rumbleAccount?.proxy || undefined;
 
             if (cookies) {
               console.log(
-                `[Video Create] Using account cookies for "${rumbleAccount?.accountName}" to bypass Cloudflare`
+                `[Video Create] ✅ Using account cookies for "${rumbleAccount?.accountName}" to bypass Cloudflare`
               );
             } else {
               console.warn(
-                `[Video Create] No active Rumble account with cookies found, attempting without cookies`
+                `[Video Create] ⚠️ No active Rumble account with cookies found. Available accounts:`,
+                rumbleAccounts
+                  .filter(acc => acc.platform === "rumble")
+                  .map(acc => ({
+                    name: acc.accountName,
+                    isActive: acc.isActive,
+                    hasCookies: !!(acc.cookies && acc.cookies.trim().length > 0)
+                  }))
               );
             }
 
@@ -277,19 +479,43 @@ export const appRouter = router({
 
         // Get cookies from any existing Rumble account to bypass Cloudflare
         const rumbleAccounts = await getAccountsByUserId(ctx.user.id);
+        console.log(`[Video Re-extract] Found ${rumbleAccounts.length} total accounts for user`);
+        
         const rumbleAccount = rumbleAccounts.find(
-          acc => acc.platform === "rumble" && acc.isActive === 1 && acc.cookies
+          acc => {
+            const isRumble = acc.platform === "rumble";
+            const isActive = acc.isActive === true; // Fix: isActive is boolean, not number
+            const hasCookies = acc.cookies && acc.cookies.trim().length > 0;
+            
+            if (isRumble) {
+              console.log(`[Video Re-extract] Checking account "${acc.accountName}": isActive=${acc.isActive}, hasCookies=${hasCookies}`);
+            }
+            
+            return isRumble && isActive && hasCookies;
+          }
         );
-        const cookies = rumbleAccount?.cookies || undefined;
+        
+        // Convert cookies from JSON format to cookie string if needed
+        let cookies: string | undefined = undefined;
+        if (rumbleAccount?.cookies) {
+          cookies = formatCookiesForRequest(rumbleAccount.cookies);
+        }
         const proxy = rumbleAccount?.proxy || undefined;
 
         if (cookies) {
           console.log(
-            `[Video Re-extract] Using account cookies for "${rumbleAccount?.accountName}" to bypass Cloudflare`
+            `[Video Re-extract] ✅ Using account cookies for "${rumbleAccount?.accountName}" to bypass Cloudflare`
           );
         } else {
           console.warn(
-            `[Video Re-extract] No active Rumble account with cookies found`
+            `[Video Re-extract] ⚠️ No active Rumble account with cookies found. Available accounts:`,
+            rumbleAccounts
+              .filter(acc => acc.platform === "rumble")
+              .map(acc => ({
+                name: acc.accountName,
+                isActive: acc.isActive,
+                hasCookies: !!(acc.cookies && acc.cookies.trim().length > 0)
+              }))
           );
         }
 
@@ -337,7 +563,7 @@ export const appRouter = router({
           id: z.number(),
           name: z.string().optional(),
           content: z.string().optional(),
-          isActive: z.number().optional(),
+          isActive: z.boolean().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -374,7 +600,7 @@ export const appRouter = router({
           videoId: input.videoId,
           accountId: input.accountId,
           commentTemplateId: input.commentTemplateId,
-          scheduledAt: input.scheduledAt?.toISOString(),
+          scheduledAt: input.scheduledAt,
         });
       }),
     update: protectedProcedure

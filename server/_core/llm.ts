@@ -209,13 +209,17 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const resolveApiUrl = () => {
+  const baseUrl = ENV.openaiBaseUrl.replace(/\/$/, "");
+  // Support providers where the base already includes /v1 (e.g. https://openrouter.ai/api/v1)
+  if (baseUrl.endsWith("/v1")) {
+    return `${baseUrl}/chat/completions`;
+  }
+  return `${baseUrl}/v1/chat/completions`;
+};
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
+  if (!ENV.openaiApiKey) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
 };
@@ -273,6 +277,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     tools,
     toolChoice,
     tool_choice,
+    maxTokens,
+    max_tokens,
     outputSchema,
     output_schema,
     responseFormat,
@@ -280,7 +286,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    // IMPORTANT: This endpoint is OpenAI-compatible. Use an OpenAI model here.
+    model: ENV.openaiModel,
     messages: messages.map(normalizeMessage),
   };
 
@@ -296,10 +303,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
-  }
+  // Honor requested max tokens (default to a reasonable value)
+  const resolvedMaxTokens = maxTokens ?? max_tokens ?? 600;
+  payload.max_tokens = resolvedMaxTokens;
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
@@ -312,11 +318,23 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
+  // One-time debug log (no secrets) to help diagnose base URL issues.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _debug = (() => {
+    const g = globalThis as any;
+    if (g.__llmDebugLogged) return;
+    g.__llmDebugLogged = true;
+    console.log("[LLM] baseUrl =", ENV.openaiBaseUrl);
+    console.log("[LLM] apiUrl  =", resolveApiUrl());
+    console.log("[LLM] model   =", ENV.openaiModel);
+    console.log("[LLM] hasKey  =", Boolean(ENV.openaiApiKey));
+  })();
+
   const response = await fetch(resolveApiUrl(), {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${ENV.openaiApiKey}`,
     },
     body: JSON.stringify(payload),
   });

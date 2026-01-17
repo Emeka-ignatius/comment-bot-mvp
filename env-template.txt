@@ -15,25 +15,22 @@ JWT_SECRET=your_jwt_secret_here
 # Example: openssl rand -base64 32
 
 # ============================================
-# REQUIRED: OAuth Configuration
+# REQUIRED: OpenAI API (Direct, not via Manus)
 # ============================================
-VITE_APP_ID=your_manus_app_id
-OAUTH_SERVER_URL=https://api.manus.im
-VITE_OAUTH_PORTAL_URL=https://manus.im/oauth
+OPENAI_API_KEY=your_openai_api_key_here
+OPEN_AI_BASE_URL=https://api.openai.com
+# Get your API key from: https://platform.openai.com/api-keys
 
 # ============================================
-# REQUIRED: Owner Information
+# REQUIRED: Local Development Mode
 # ============================================
-OWNER_OPEN_ID=your_owner_open_id
-OWNER_NAME=your_owner_name
+LOCAL_DEV_MODE=true
+# Set to 'true' to bypass authentication and use mock user
 
 # ============================================
-# REQUIRED: Manus Built-in APIs
+# OPTIONAL: Backend URL
 # ============================================
-BUILT_IN_FORGE_API_URL=https://forge.manus.im
-BUILT_IN_FORGE_API_KEY=your_backend_forge_api_key
-VITE_FRONTEND_FORGE_API_URL=https://forge.manus.im
-VITE_FRONTEND_FORGE_API_KEY=your_frontend_forge_api_key
+VITE_BACKEND_URL=http://localhost:3000
 
 # ============================================
 # OPTIONAL: Analytics
@@ -61,12 +58,18 @@ PUPPETEER_EXECUTABLE_PATH=
 # Or set to custom Chrome path if needed
 
 # ============================================
+# OPTIONAL: Google Maps API (if using maps feature)
+# ============================================
+GOOGLE_MAPS_API_KEY=
+# Only needed if using Google Maps features
+
+# ============================================
 # LOCAL DEVELOPMENT NOTES:
 # ============================================
 # 1. Copy this file to .env in project root
 # 2. Fill in all REQUIRED values
-# 3. Run: npx puppeteer browsers install chrome
-# 4. Run: pnpm install
+# 3. Run: pnpm install (to remove Manus dependencies)
+# 4. Run: pnpm exec playwright install chromium
 # 5. Run: pnpm db:push (to sync database schema)
 # 6. Run: pnpm dev
 # 7. Open: http://localhost:3000

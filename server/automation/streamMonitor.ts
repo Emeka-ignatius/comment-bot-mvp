@@ -211,7 +211,7 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
     const availableAccounts = accounts.filter(a => 
       config.accountIds.includes(a.id) && 
       a.platform === config.platform &&
-      a.isActive === 1
+      a.isActive === true
     );
     
     if (availableAccounts.length === 0) {
@@ -465,7 +465,9 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
     console.log(`[StreamMonitor] Capturing audio for session ${session.id}`);
     
     // Capture audio from the stream
-    let audioUrl: string | undefined;
+    let audio:
+      | { audioBuffer: Buffer; mimeType: string; filename?: string }
+      | undefined;
     
     try {
       // Try to capture audio using ffmpeg approach
@@ -475,8 +477,12 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
         streamUrl: config.streamUrl,
       });
       
-      audioUrl = audioResult.audioUrl;
-      console.log(`[StreamMonitor] Audio captured: ${audioResult.fileSize} bytes`);
+      audio = {
+        audioBuffer: audioResult.audioBuffer,
+        mimeType: audioResult.mimeType,
+        filename: audioResult.filename,
+      };
+      console.log(`[StreamMonitor] Audio captured: ${audioResult.fileSize} bytes (${audioResult.mimeType})`);
     } catch (err) {
       // Fallback: try to capture audio from page context
       console.warn(`[StreamMonitor] FFmpeg audio capture failed, trying page context:`, err);
@@ -486,21 +492,27 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
           duration: Math.min(config.audioInterval, 15), // Shorter capture for page context
           streamUrl: config.streamUrl,
         });
-        audioUrl = audioResult.audioUrl;
-        console.log(`[StreamMonitor] Page context audio captured: ${audioResult.fileSize} bytes`);
+        audio = {
+          audioBuffer: audioResult.audioBuffer,
+          mimeType: audioResult.mimeType,
+          filename: audioResult.filename,
+        };
+        console.log(
+          `[StreamMonitor] Page context audio captured: ${audioResult.fileSize} bytes (${audioResult.mimeType})`
+        );
       } catch (pageErr) {
         console.warn(`[StreamMonitor] Page context audio capture also failed:`, pageErr);
         return;
       }
     }
     
-    if (!audioUrl) {
-      console.warn(`[StreamMonitor] No audio URL available`);
+    if (!audio) {
+      console.warn(`[StreamMonitor] No audio available`);
       return;
     }
     
     // Transcribe the audio
-    const transcription = await transcribeStreamAudio(audioUrl, {
+    const transcription = await transcribeStreamAudio(audio, {
       language: 'en',
       prompt: 'Transcribe what the streamer is saying',
     });

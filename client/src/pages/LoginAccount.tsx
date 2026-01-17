@@ -36,11 +36,18 @@ export default function LoginAccount() {
   const createMutation = trpc.accounts.create.useMutation();
   const updateMutation = trpc.accounts.update.useMutation();
   const deleteMutation = trpc.accounts.delete.useMutation();
+  const connectInitMutation = trpc.accounts.connectInit.useMutation();
 
   const [showCookieHelper, setShowCookieHelper] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<
     "youtube" | "rumble"
   >("rumble");
+
+  // Auto-connect (extension-based) state
+  const [showAutoConnect, setShowAutoConnect] = useState(false);
+  const [connectAccountName, setConnectAccountName] = useState("Rumble Account");
+  const [connectToken, setConnectToken] = useState<string | null>(null);
+  const [connectExpiresAt, setConnectExpiresAt] = useState<string | null>(null);
 
   // Edit modal state
   const [editAccount, setEditAccount] = useState<EditAccountData | null>(null);
@@ -119,6 +126,30 @@ export default function LoginAccount() {
     }
   };
 
+  const startAutoConnect = async () => {
+    try {
+      const result = await connectInitMutation.mutateAsync({
+        platform: "rumble",
+        accountName: connectAccountName.trim() || undefined,
+      });
+      setConnectToken(result.connectToken);
+      setConnectExpiresAt(new Date(result.expiresAt).toLocaleString());
+      toast.success("Connect token generated");
+    } catch (error) {
+      toast.error("Failed to generate connect token");
+    }
+  };
+
+  const copyToken = async () => {
+    if (!connectToken) return;
+    try {
+      await navigator.clipboard.writeText(connectToken);
+      toast.success("Token copied");
+    } catch {
+      toast.error("Failed to copy token");
+    }
+  };
+
   return (
     <AdminDashboardLayout>
       <div className="space-y-6">
@@ -133,8 +164,9 @@ export default function LoginAccount() {
           </h2>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Select a platform to add your account. You'll need the
-              Cookie-Editor browser extension to export your login cookies.
+              Select a platform to add your account. You can either paste
+              cookies manually or use the auto-connect flow (recommended for
+              deployed).
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -147,7 +179,7 @@ export default function LoginAccount() {
                 className="h-24 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5"
               >
                 <div className="text-3xl">🎥</div>
-                <div className="font-semibold">Add Rumble Account</div>
+                <div className="font-semibold">Add Rumble Account (Manual)</div>
               </Button>
               <Button
                 onClick={() => {
@@ -161,8 +193,88 @@ export default function LoginAccount() {
                 <div className="font-semibold">Add YouTube Account</div>
               </Button>
             </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                onClick={() => {
+                  setShowAutoConnect(true);
+                  setConnectToken(null);
+                  setConnectExpiresAt(null);
+                }}
+                variant="default"
+              >
+                Connect Rumble (Auto)
+              </Button>
+              <Button
+                onClick={() => window.open("https://rumble.com/account/signin", "_blank")}
+                variant="outline"
+              >
+                Open Rumble Login Page
+              </Button>
+            </div>
           </div>
         </Card>
+
+        <Dialog open={showAutoConnect} onOpenChange={open => !open && setShowAutoConnect(false)}>
+          <DialogContent className="w-[95vw] sm:w-full sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Connect Rumble Account (Auto)</DialogTitle>
+              <DialogDescription>
+                This generates a short-lived token. Use the browser extension to capture your rumble.com cookies
+                from your own browser session and save them to this app.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Account Name</label>
+                <Input
+                  value={connectAccountName}
+                  onChange={e => setConnectAccountName(e.target.value)}
+                  placeholder="e.g., My Main Rumble"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={startAutoConnect} disabled={connectInitMutation.isPending}>
+                  {connectInitMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+                  Generate Token
+                </Button>
+                <Button variant="outline" onClick={() => setShowAutoConnect(false)}>
+                  Close
+                </Button>
+              </div>
+
+              {connectToken && (
+                <div className="space-y-2 p-3 bg-muted rounded-lg">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium">Connect Token</div>
+                    <Button size="sm" variant="outline" onClick={copyToken}>
+                      Copy
+                    </Button>
+                  </div>
+                  <div className="font-mono text-xs break-all p-2 bg-background rounded border">
+                    {connectToken}
+                  </div>
+                  {connectExpiresAt && (
+                    <div className="text-xs text-muted-foreground">
+                      Expires at: {connectExpiresAt}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
+                    Steps:
+                    <ol className="list-decimal ml-5 mt-1 space-y-1">
+                      <li>Install the Comment Bot cookie capture extension (MV3).</li>
+                      <li>Log into Rumble in your normal browser (or keep your session active).</li>
+                      <li>Open the extension popup, paste this token, and click “Capture & Send”.</li>
+                      <li>Refresh this page; the account will appear in your list.</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {showCookieHelper && (
           <CookieInputHelper

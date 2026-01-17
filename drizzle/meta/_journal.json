@@ -1,48 +1,5 @@
 {
   "version": "7",
-  "dialect": "mysql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "5",
-      "when": 1766997422327,
-      "tag": "0000_motionless_hulk",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1767000004401,
-      "tag": "0001_rapid_pretty_boy",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1767027138174,
-      "tag": "0002_motionless_photon",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "5",
-      "when": 1767086896233,
-      "tag": "0003_colossal_terror",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "5",
-      "when": 1767092371507,
-      "tag": "0004_wooden_shinko_yamashiro",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "5",
-      "when": 1767407674536,
-      "tag": "0005_tranquil_carnage",
-      "breakpoints": true
-    }
-  ]
+  "dialect": "postgresql",
+  "entries": []
 }

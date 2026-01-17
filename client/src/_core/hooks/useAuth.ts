@@ -42,10 +42,7 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    localStorage.setItem("user-info", JSON.stringify(meQuery.data));
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,
@@ -76,9 +73,14 @@ export function useAuth(options?: UseAuthOptions) {
     state.user,
   ]);
 
+  const refresh = useCallback(async () => {
+    const result = await meQuery.refetch();
+    return result;
+  }, [meQuery]);
+
   return {
     ...state,
-    refresh: () => meQuery.refetch(),
+    refresh,
     logout,
   };
 }

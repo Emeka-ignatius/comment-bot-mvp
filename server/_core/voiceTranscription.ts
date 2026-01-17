@@ -33,6 +33,14 @@ export type TranscribeOptions = {
   prompt?: string; // Optional: custom prompt for the transcription
 };
 
+export type TranscribeBytesOptions = {
+  audioBuffer: Buffer; // Raw audio bytes (preferred; avoids any storage dependency)
+  mimeType: string;
+  filename?: string;
+  language?: string;
+  prompt?: string;
+};
+
 // Native Whisper API segment format
 export type WhisperSegment = {
   id: number;
@@ -80,18 +88,11 @@ export async function transcribeAudio(
 ): Promise<TranscriptionResponse | TranscriptionError> {
   try {
     // Step 1: Validate environment configuration
-    if (!ENV.forgeApiUrl) {
-      return {
-        error: "Voice transcription service is not configured",
-        code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_URL is not set",
-      };
-    }
-    if (!ENV.forgeApiKey) {
+    if (!ENV.openaiApiKey) {
       return {
         error: "Voice transcription service authentication is missing",
         code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_KEY is not set",
+        details: "OPENAI_API_KEY is not set",
       };
     }
 
@@ -150,16 +151,12 @@ export async function transcribeAudio(
     formData.append("prompt", prompt);
 
     // Step 4: Call the transcription service
-    const baseUrl = ENV.forgeApiUrl.endsWith("/")
-      ? ENV.forgeApiUrl
-      : `${ENV.forgeApiUrl}/`;
-
-    const fullUrl = new URL("v1/audio/transcriptions", baseUrl).toString();
+    const fullUrl = resolveTranscriptionUrl();
 
     const response = await fetch(fullUrl, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${ENV.forgeApiKey}`,
+        authorization: `Bearer ${ENV.openaiApiKey}`,
         "Accept-Encoding": "identity",
       },
       body: formData,
@@ -196,6 +193,97 @@ export async function transcribeAudio(
         error instanceof Error ? error.message : "An unexpected error occurred",
     };
   }
+}
+
+/**
+ * Transcribe audio bytes to text using OpenAI Whisper (`whisper-1`).
+ *
+ * This avoids any external storage dependency (no audioUrl required).
+ */
+export async function transcribeAudioBytes(
+  options: TranscribeBytesOptions
+): Promise<TranscriptionResponse | TranscriptionError> {
+  try {
+    if (!ENV.openaiApiKey) {
+      return {
+        error: "Voice transcription service authentication is missing",
+        code: "SERVICE_ERROR",
+        details: "OPENAI_API_KEY is not set",
+      };
+    }
+
+    // OpenAI Whisper transcription endpoint limit is typically 25MB.
+    const sizeMB = options.audioBuffer.length / (1024 * 1024);
+    if (sizeMB > 25) {
+      return {
+        error: "Audio file exceeds maximum size limit",
+        code: "FILE_TOO_LARGE",
+        details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 25MB`,
+      };
+    }
+
+    const formData = new FormData();
+    const filename = options.filename || `audio.${getFileExtension(options.mimeType)}`;
+    const audioBlob = new Blob([new Uint8Array(options.audioBuffer)], {
+      type: options.mimeType,
+    });
+    formData.append("file", audioBlob, filename);
+
+    formData.append("model", "whisper-1");
+    formData.append("response_format", "verbose_json");
+
+    const prompt =
+      options.prompt ||
+      (options.language
+        ? `Transcribe the user's voice to text, the user's working language is ${getLanguageName(options.language)}`
+        : "Transcribe the user's voice to text");
+    formData.append("prompt", prompt);
+
+    const response = await fetch(resolveTranscriptionUrl(), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${ENV.openaiApiKey}`,
+        "Accept-Encoding": "identity",
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      return {
+        error: "Transcription service request failed",
+        code: "TRANSCRIPTION_FAILED",
+        details: `${response.status} ${response.statusText}${errorText ? `: ${errorText}` : ""}`,
+      };
+    }
+
+    const whisperResponse = (await response.json()) as WhisperResponse;
+    if (!whisperResponse.text || typeof whisperResponse.text !== "string") {
+      return {
+        error: "Invalid transcription response",
+        code: "SERVICE_ERROR",
+        details: "Transcription service returned an invalid response format",
+      };
+    }
+
+    return whisperResponse;
+  } catch (error) {
+    return {
+      error: "Voice transcription failed",
+      code: "SERVICE_ERROR",
+      details:
+        error instanceof Error ? error.message : "An unexpected error occurred",
+    };
+  }
+}
+
+function resolveTranscriptionUrl(): string {
+  const baseUrl = ENV.openaiBaseUrl.replace(/\/$/, "");
+  // Support base URLs that already include /v1 (e.g. https://api.openai.com/v1 or https://openrouter.ai/api/v1)
+  if (baseUrl.endsWith("/v1")) {
+    return `${baseUrl}/audio/transcriptions`;
+  }
+  return `${baseUrl}/v1/audio/transcriptions`;
 }
 
 /**

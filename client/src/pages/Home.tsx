@@ -34,23 +34,27 @@ export default function Home() {
       <div className="text-center space-y-6 p-8">
         <h1 className="text-4xl font-bold text-gray-900">Comment Bot MVP</h1>
         <p className="text-lg text-gray-600">AI-powered comment automation for live streams</p>
-        {isLocalhost ? (
-          <div className="space-y-2">
+          <div className="space-y-4">
+            <Button 
+              size="lg"
+              onClick={() => window.location.href = getLoginUrl()}
+            >
+              Sign In to Continue
+            </Button>
             <p className="text-sm text-gray-500">
-              Local Dev Mode: Authentication is bypassed
-            </p>
-            <p className="text-sm text-gray-500">
-              You will be automatically logged in as "Local Dev User"
+              Don't have an account?{" "}
+              <a 
+                href="/login" 
+                className="text-blue-600 hover:underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.location.href = "/login";
+                }}
+              >
+                Create one here
+              </a>
             </p>
           </div>
-        ) : (
-          <Button 
-            size="lg"
-            onClick={() => window.location.href = getLoginUrl()}
-          >
-            Sign In to Continue
-          </Button>
-        )}
       </div>
     </div>
   );

@@ -2,17 +2,74 @@
  * Audio Capture Service
  * 
  * Captures audio from live stream pages using Playwright
- * Uploads to S3 for transcription
+ * Captures a short audio chunk for transcription (no external storage required)
  */
 
 import { Page } from 'playwright';
-import { storagePut } from '../storage';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { writeFileSync, unlinkSync, existsSync } from 'fs';
-import { join } from 'path';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, rm, mkdtemp } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
-const execAsync = promisify(exec);
+type ResolvedBinary = { name: string; path: string };
+
+const resolveBinaryPath = async (
+  packageName: string,
+  fallbackCommand: string
+): Promise<ResolvedBinary> => {
+  try {
+    const mod: any = await import(packageName);
+    const resolved = mod?.default ?? mod;
+    if (typeof resolved === 'string' && resolved.length > 0) {
+      return { name: packageName, path: resolved };
+    }
+  } catch {
+    // ignore
+  }
+  return { name: fallbackCommand, path: fallbackCommand };
+};
+
+const execFile = async (
+  file: string,
+  args: string[],
+  options?: { timeoutMs?: number }
+): Promise<{ stdout: string; stderr: string }> => {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+
+    const timeout =
+      options?.timeoutMs != null
+        ? setTimeout(() => {
+            child.kill('SIGKILL');
+            reject(new Error(`Process timed out after ${options.timeoutMs}ms: ${file}`));
+          }, options.timeoutMs)
+        : null;
+
+    child.stdout.on('data', chunk => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', chunk => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', err => {
+      if (timeout) clearTimeout(timeout);
+      reject(err);
+    });
+    child.on('close', code => {
+      if (timeout) clearTimeout(timeout);
+      if (code === 0) return resolve({ stdout, stderr });
+      reject(
+        new Error(
+          `Process failed (exit ${code}): ${file}\n${stderr || stdout || ''}`.trim()
+        )
+      );
+    });
+  });
+};
 
 export interface AudioCaptureConfig {
   page: Page;
@@ -21,10 +78,77 @@ export interface AudioCaptureConfig {
 }
 
 export interface AudioCaptureResult {
-  audioUrl: string;        // S3 URL for the captured audio
+  audioBuffer: Buffer;     // Captured audio bytes (ready to transcribe)
+  mimeType: string;
+  filename: string;
   duration: number;        // Actual duration captured
   fileSize: number;        // Size in bytes
   transcript?: string;     // Optional: transcribed text
+}
+
+type CachedResolvedUrl = { url: string; ts: number };
+const resolvedUrlCache = new Map<string, CachedResolvedUrl>();
+const RESOLVED_URL_TTL_MS = 5 * 60 * 1000;
+
+async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
+  const cached = resolvedUrlCache.get(streamUrl);
+  if (cached && Date.now() - cached.ts < RESOLVED_URL_TTL_MS) {
+    return cached.url;
+  }
+
+  // Prefer yt-dlp-wrap (downloads yt-dlp at runtime; no system install required).
+  try {
+    const mod: any = await import('yt-dlp-wrap');
+    // In ESM, this package exports an object with `default.default` as the constructor.
+    const YTDlpWrap = mod?.default?.default ?? mod?.default ?? mod;
+    if (typeof YTDlpWrap !== 'function') {
+      throw new Error('yt-dlp-wrap export is not a constructor');
+    }
+
+    const binDir = path.join(os.tmpdir(), 'comment-bot-bin');
+    await mkdir(binDir, { recursive: true });
+    const binName = os.platform() === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+    const binPath = path.join(binDir, binName);
+
+    // yt-dlp-wrap does not auto-download yt-dlp; we download it to our bin path if missing.
+    if (!existsSync(binPath) && typeof YTDlpWrap.downloadFromGithub === 'function') {
+      console.log(`[AudioCapture] Downloading yt-dlp binary to ${binPath}`);
+      await YTDlpWrap.downloadFromGithub(binPath);
+    }
+
+    const { stdout } = await execFile(
+      binPath,
+      ['-g', '-f', 'bestaudio', '--no-playlist', '--no-warnings', streamUrl],
+      { timeoutMs: 45_000 }
+    );
+    const url = stdout
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .find(Boolean);
+    if (!url) throw new Error('yt-dlp returned no media URL');
+    resolvedUrlCache.set(streamUrl, { url, ts: Date.now() });
+    return url;
+  } catch (err) {
+    console.warn(
+      `[AudioCapture] yt-dlp-wrap failed, falling back to system yt-dlp: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+
+  // Fallback: system yt-dlp if present
+  const { stdout } = await execFile(
+    'yt-dlp',
+    ['-g', '-f', 'bestaudio', '--no-playlist', '--no-warnings', streamUrl],
+    { timeoutMs: 45_000 }
+  );
+  const url = stdout
+    .split(/\r?\n/)
+    .map(s => s.trim())
+    .find(Boolean);
+  if (!url) throw new Error('yt-dlp returned no media URL');
+  resolvedUrlCache.set(streamUrl, { url, ts: Date.now() });
+  return url;
 }
 
 /**
@@ -37,53 +161,59 @@ export async function captureStreamAudio(config: AudioCaptureConfig): Promise<Au
   const { duration, streamUrl } = config;
   
   try {
-    console.log(`[AudioCapture] Starting audio capture from ${streamUrl} for ${duration}s`);
-    
-    const audioPath = join('/tmp', `audio_${Date.now()}.mp3`);
-    
-    // Use ffmpeg to extract audio from the stream
-    // This works by downloading the stream and extracting just the audio
-    const ffmpegCmd = `ffmpeg -i "${streamUrl}" -f mp3 -t ${duration} -q:a 9 -n "${audioPath}" 2>&1`;
-    
-    console.log(`[AudioCapture] Running: ${ffmpegCmd}`);
-    
-    try {
-      const { stdout, stderr } = await execAsync(ffmpegCmd, { timeout: (duration + 30) * 1000 });
-      console.log(`[AudioCapture] FFmpeg output:`, stdout || stderr);
-    } catch (error: any) {
-      // FFmpeg might exit with non-zero even on success, check if file was created
-      if (!existsSync(audioPath)) {
-        console.error(`[AudioCapture] FFmpeg failed and no audio file created:`, error.message);
-        throw new Error(`Failed to capture audio: ${error.message}`);
-      }
-      console.log(`[AudioCapture] FFmpeg completed with file created`);
+    console.log(`[AudioCapture] Resolving media URL via yt-dlp for ${streamUrl}`);
+    const mediaUrl = await resolveMediaUrlWithYtDlp(streamUrl);
+    console.log(`[AudioCapture] Resolved media URL: ${mediaUrl.slice(0, 160)}...`);
+
+    const ffmpeg = await resolveBinaryPath('ffmpeg-static', 'ffmpeg');
+
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'comment-bot-audio-'));
+    const filename = `audio_${Date.now()}.wav`;
+    const audioPath = path.join(tmpDir, filename);
+
+    // Use ffmpeg to extract audio from the resolved media URL.
+    // WAV PCM is reliable across ffmpeg builds (no codec surprises).
+    const ffmpegArgs = [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-i',
+      mediaUrl,
+      '-t',
+      String(duration),
+      '-vn',
+      '-ac',
+      '1',
+      '-ar',
+      '16000',
+      '-f',
+      'wav',
+      audioPath,
+    ];
+
+    console.log(`[AudioCapture] Running ffmpeg (${ffmpeg.name}) for ${duration}s`);
+    await execFile(ffmpeg.path, ffmpegArgs, { timeoutMs: (duration + 45) * 1000 });
+
+    if (!existsSync(audioPath)) {
+      throw new Error('ffmpeg finished but no audio file was created');
     }
-    
-    // Read the audio file
-    const fs = await import('fs').then(m => m.promises);
-    const audioBuffer = await fs.readFile(audioPath);
+
+    const audioBuffer = await readFile(audioPath);
     
     console.log(`[AudioCapture] Audio file size: ${audioBuffer.length} bytes`);
     
     if (audioBuffer.length < 1000) {
       console.warn(`[AudioCapture] Audio file is very small, capture may have failed`);
     }
-    
-    // Upload to S3
-    const fileKey = `audio-captures/${Date.now()}-stream-audio.mp3`;
-    const { url } = await storagePut(fileKey, audioBuffer, 'audio/mpeg');
-    
-    console.log(`[AudioCapture] Audio uploaded to S3: ${url}`);
-    
-    // Clean up local file
-    try {
-      unlinkSync(audioPath);
-    } catch (e) {
-      console.warn(`[AudioCapture] Could not delete local file: ${e}`);
-    }
+
+    // Clean up temp dir (best effort)
+    rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     
     return {
-      audioUrl: url,
+      audioBuffer,
+      mimeType: 'audio/wav',
+      filename,
       duration,
       fileSize: audioBuffer.length,
     };
@@ -181,32 +311,20 @@ export async function capturePageContextAudio(config: AudioCaptureConfig): Promi
     }, duration);
     
     if (!audioData.chunks) {
-      console.warn(`[AudioCapture] No audio data captured from page context`);
-      // Return a minimal audio file
-      const minimalAudio = Buffer.from([0x52, 0x49, 0x46, 0x46]); // RIFF header
-      const fileKey = `audio-captures/${Date.now()}-empty.webm`;
-      const { url } = await storagePut(fileKey, minimalAudio, 'audio/webm');
-      
-      return {
-        audioUrl: url,
-        duration,
-        fileSize: minimalAudio.length,
-      };
+      throw new Error('No audio data captured from page context');
     }
     
     // Convert base64 to buffer
     const audioBuffer = Buffer.from(audioData.chunks, 'base64');
     
     console.log(`[AudioCapture] Audio captured from page context: ${audioBuffer.length} bytes`);
-    
-    // Upload to S3
-    const fileKey = `audio-captures/${Date.now()}-page-audio.webm`;
-    const { url } = await storagePut(fileKey, audioBuffer, 'audio/webm');
-    
-    console.log(`[AudioCapture] Audio uploaded to S3: ${url}`);
-    
+
+    const filename = `audio_${Date.now()}.webm`;
+
     return {
-      audioUrl: url,
+      audioBuffer,
+      mimeType: 'audio/webm',
+      filename,
       duration,
       fileSize: audioBuffer.length,
     };
@@ -222,7 +340,8 @@ export async function capturePageContextAudio(config: AudioCaptureConfig): Promi
  */
 export async function checkFFmpegAvailable(): Promise<boolean> {
   try {
-    await execAsync('ffmpeg -version', { timeout: 5000 });
+    const ffmpeg = await resolveBinaryPath('ffmpeg-static', 'ffmpeg');
+    await execFile(ffmpeg.path, ['-version'], { timeoutMs: 5000 });
     return true;
   } catch (error) {
     console.warn(`[AudioCapture] FFmpeg not available:`, error);

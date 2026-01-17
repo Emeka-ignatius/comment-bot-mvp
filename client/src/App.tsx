@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { useAuth } from "./_core/hooks/useAuth";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
 import LoginAccount from "./pages/LoginAccount";
 import Videos from "./pages/Videos";
 import Comments from "./pages/Comments";
@@ -16,6 +17,21 @@ import BatchJobs from "./pages/BatchJobs";
 import AdminDashboardLayout from "./components/AdminDashboardLayout";
 import Logs from "./pages/Logs";
 import AIAutoComment from "./pages/AIAutoComment";
+
+// Protected routes that require authentication
+const PROTECTED_ROUTES = [
+  "/dashboard",
+  "/login-account",
+  "/videos",
+  "/comments",
+  "/jobs",
+  "/batch",
+  "/logs",
+  "/ai-comment",
+];
+
+// Public routes that don't require authentication
+const PUBLIC_ROUTES = ["/", "/login"];
 
 function Router() {
   const { user, loading } = useAuth();
@@ -28,9 +44,32 @@ function Router() {
     }
   }, [loading, user, location, setLocation]);
 
+  // Protect routes - redirect to login if not authenticated
+  useEffect(() => {
+    if (loading) return; // Wait for auth check to complete
+
+    const isProtectedRoute = PROTECTED_ROUTES.includes(location);
+
+    // If trying to access protected route without auth, redirect to login
+    if (isProtectedRoute && !user) {
+      console.log(
+        `[Router] Unauthenticated access to ${location}, redirecting to /login`
+      );
+      setLocation("/login");
+      return;
+    }
+
+    // If authenticated and trying to access login page, redirect to dashboard
+    if (location === "/login" && user) {
+      setLocation("/dashboard");
+      return;
+    }
+  }, [loading, user, location, setLocation]);
+
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/login" component={Login} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/login-account" component={LoginAccount} />
       <Route path="/videos" component={Videos} />
@@ -48,9 +87,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />

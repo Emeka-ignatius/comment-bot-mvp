@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Comment Bot Cookie Connector",
+  "version": "0.1.0",
+  "description": "Capture rumble.com cookies and connect to Comment Bot MVP via a one-time token.",
+  "incognito": "split",
+  "action": {
+    "default_title": "Connect Rumble",
+    "default_popup": "popup.html"
+  },
+  "permissions": ["cookies", "storage"],
+  "host_permissions": [
+    "https://rumble.com/*",
+    "https://*.rumble.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "http://*/*",
+    "https://*/*"
+  ]
+}
+

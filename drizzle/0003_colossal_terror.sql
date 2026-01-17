@@ -1,1 +1,0 @@
-ALTER TABLE `videos` ADD `chatId` varchar(255);

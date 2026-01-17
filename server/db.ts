@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   InsertUser,
   users,
@@ -17,15 +18,57 @@ import {
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _client: postgres.Sql | null = null;
 
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const databaseUrl = process.env.DATABASE_URL;
+
+      // Parse URL to check if it's a pooled connection
+      // Use try-catch for URL parsing as connection string format may vary
+      let isPooled = false;
+      try {
+        const url = new URL(databaseUrl);
+        isPooled = url.hostname.includes("-pooler");
+      } catch {
+        // If URL parsing fails, check the string directly
+        isPooled = databaseUrl.includes("-pooler");
+      }
+
+      // Create postgres client with optimized settings for Neon
+      _client = postgres(databaseUrl, {
+        max: isPooled ? 10 : 1, // Pooled connections can handle more
+        idle_timeout: 20, // Close idle connections after 20 seconds
+        connect_timeout: 30, // 30 second timeout (Neon can be slow to wake up)
+        ssl: "require", // Ensure SSL is required for Neon
+        prepare: false, // Disable prepared statements for serverless (can cause issues)
+        // Connection retry settings
+        max_lifetime: 60 * 30, // 30 minutes max connection lifetime
+        onnotice: () => {}, // Suppress notices
+      });
+
+      // Test the connection
+      await _client`SELECT 1`;
+
+      _db = drizzle(_client);
+      console.log(
+        `[Database] Connected to Postgres database${isPooled ? " (pooled)" : ""}`
+      );
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.error("[Database] Failed to connect:", error);
+      // Don't set _db to null on first failure, allow retry
+      if (_client) {
+        try {
+          await _client.end({ timeout: 5 });
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        _client = null;
+      }
       _db = null;
+      throw error; // Re-throw to allow caller to handle
     }
   }
   return _db;
@@ -48,7 +91,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     };
     const updateSet: Record<string, unknown> = {};
 
-    const textFields = ["name", "email", "loginMethod"] as const;
+    const textFields = ["name", "email", "loginMethod", "password"] as const;
     type TextField = (typeof textFields)[number];
 
     const assignNullable = (field: TextField) => {
@@ -68,20 +111,19 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user.role !== undefined) {
       values.role = user.role;
       updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date().toISOString();
+      values.lastSignedIn = new Date();
     }
 
     if (Object.keys(updateSet).length === 0) {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    // Postgres uses ON CONFLICT instead of onDuplicateKeyUpdate
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
       set: updateSet,
     });
   } catch (error) {
@@ -104,6 +146,30 @@ export async function getUserByOpenId(openId: string) {
     .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email.toLowerCase().trim()))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function createUser(data: InsertUser) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(users).values(data).returning();
+  return result[0];
 }
 
 // Accounts queries

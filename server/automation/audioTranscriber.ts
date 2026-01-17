@@ -1,14 +1,15 @@
 /**
  * Audio Transcription Integration Service
  * 
- * Handles transcription of captured audio using Manus's built-in Whisper API
+ * Handles transcription of captured audio using OpenAI Whisper
  * Caches recent transcripts to avoid re-transcribing the same audio
  */
 
-import { transcribeAudio, type TranscriptionResponse, type TranscriptionError } from '../_core/voiceTranscription';
+import { createHash } from 'node:crypto';
+import { transcribeAudioBytes } from '../_core/voiceTranscription';
 
 export interface TranscriptionCache {
-  audioUrl: string;
+  key: string;
   transcript: string;
   timestamp: Date;
   duration: number;
@@ -23,31 +24,39 @@ const CACHE_TTL = 5 * 60 * 1000;
 /**
  * Transcribe audio from a stream
  * 
- * Uses Manus's built-in Whisper API for transcription
+ * Uses OpenAI Whisper (`whisper-1`) for transcription (no external storage needed)
  * Caches results to avoid redundant API calls
  */
 export async function transcribeStreamAudio(
-  audioUrl: string,
+  input: { audioBuffer: Buffer; mimeType: string; filename?: string },
   options?: { language?: string; prompt?: string }
 ): Promise<{ text: string; segments?: any[] } | null> {
   try {
-    console.log(`[AudioTranscriber] Starting transcription for: ${audioUrl}`);
+    const key = createHash('sha1')
+      .update(input.audioBuffer)
+      .digest('hex')
+      .slice(0, 24);
+
+    console.log(
+      `[AudioTranscriber] Starting transcription (bytes, ${input.mimeType}, ${input.audioBuffer.length} bytes, key=${key})`
+    );
     
     // Check cache first
-    const cached = transcriptionCache.get(audioUrl);
+    const cached = transcriptionCache.get(key);
     if (cached && Date.now() - cached.timestamp.getTime() < CACHE_TTL) {
-      console.log(`[AudioTranscriber] Using cached transcript for ${audioUrl}`);
+      console.log(`[AudioTranscriber] Using cached transcript for key=${key}`);
       return {
         text: cached.transcript,
         segments: [],
       };
     }
     
-    // Call Whisper API via Manus helper
-    const result = await transcribeAudio({
-      audioUrl,
+    const result = await transcribeAudioBytes({
+      audioBuffer: input.audioBuffer,
+      mimeType: input.mimeType,
+      filename: input.filename,
       language: options?.language || 'en',
-      prompt: options?.prompt || 'Transcribe the streamer\'s voice and chat interactions',
+      prompt: options?.prompt || "Transcribe the streamer's voice and any clearly audible speech",
     });
     
     // Check for error response
@@ -57,8 +66,8 @@ export async function transcribeStreamAudio(
     }
     
     // Cache the result
-    transcriptionCache.set(audioUrl, {
-      audioUrl,
+    transcriptionCache.set(key, {
+      key,
       transcript: result.text,
       timestamp: new Date(),
       duration: result.duration,
