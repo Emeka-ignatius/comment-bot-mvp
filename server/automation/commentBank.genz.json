@@ -115,6 +115,45 @@
       "W chat 👀",
       "COOKED 💀",
       "HIM 🔥"
+    ],
+    "news_react": [
+      "nah this is crazy 😭🇺🇸🔥",
+      "WTF is going on 💀🇺🇸",
+      "this is corruption fr 😤🔥",
+      "ain’t no way… 💀",
+      "bro what 😭",
+      "they’re not even hiding it 😭",
+      "that’s actually wild 💀🔥",
+      "chat this is bananas 😭💀",
+      "nahhhh that’s insane 😤🔥"
+    ],
+    "news_agree": [
+      "facts 😤💯",
+      "exactlyyyy 😤🔥",
+      "100% 💯🔥",
+      "you right fr 😤",
+      "no cap 😤💯",
+      "THIS 👆💯🔥",
+      "real talk 😤🔥"
+    ],
+    "news_questions": [
+      "when do they vote on this? 👀🤔",
+      "chat how is this even legal?? 🤔💀",
+      "what’s the end game here? 🤔🔥",
+      "so who’s stopping this?? 👀😤",
+      "how did it get this bad? 🤔"
+    ],
+    "news_thanks": [
+      "great show today 🙏🔥",
+      "thank you 🙏🇺🇸",
+      "W show fr 🙏🔥",
+      "appreciate you 🙏",
+      "God bless y’all 🙏🇺🇸",
+      "see y’all next stream 🙌🔥"
+    ],
+    "news_tags": [
+      "r+usa 🇺🇸🔥",
+      "r+usa 🙏🇺🇸"
     ]
   },
   "hard_bans": [
@@ -128,6 +167,12 @@
     "cannot",
     "i can't access",
     "i don't have access",
-    "according to the screenshot"
+    "according to the screenshot",
+    "retarded",
+    "pedophiles",
+    "kill",
+    "hang",
+    "die",
+    "illegal aliens"
   ]
 }

@@ -69,7 +69,34 @@ function loadCommentBank(): CommentBank | null {
   }
 }
 
-function pickExamples(bank: CommentBank | null, style: CommentStyle): { buckets: string[]; examples: string[]; bans: string[] } {
+function looksLikeNewsContext(text: string): boolean {
+  const t = (text || "").toLowerCase();
+  const keywords = [
+    "news",
+    "episode",
+    "election",
+    "vote",
+    "voting",
+    "senate",
+    "congress",
+    "constitution",
+    "scotus",
+    "tax",
+    "policy",
+    "corruption",
+    "democrat",
+    "republican",
+    "trump",
+    "biden",
+  ];
+  return keywords.some(k => t.includes(k));
+}
+
+function pickExamples(
+  bank: CommentBank | null,
+  style: CommentStyle,
+  contextText: string
+): { buckets: string[]; examples: string[]; bans: string[] } {
   if (!bank) return { buckets: [], examples: [], bans: [] };
 
   // Map our UI style to a few relevant buckets (model can still choose the final vibe).
@@ -85,8 +112,24 @@ function pickExamples(bank: CommentBank | null, style: CommentStyle): { buckets:
   };
 
   const buckets = styleToBuckets[style] || [];
+
+  // If it looks like a news/politics stream, mix in the news buckets too.
+  const isNews = looksLikeNewsContext(contextText);
+  const combinedBuckets = isNews
+    ? Array.from(
+        new Set([
+          ...buckets,
+          "news_react",
+          "news_agree",
+          "news_questions",
+          "news_thanks",
+          "news_tags",
+        ])
+      )
+    : buckets;
+
   const pool: string[] = [];
-  for (const b of buckets) {
+  for (const b of combinedBuckets) {
     const items = bank.buckets?.[b] || [];
     pool.push(...items);
   }
@@ -100,7 +143,7 @@ function pickExamples(bank: CommentBank | null, style: CommentStyle): { buckets:
   }
 
   const bans = (bank.hard_bans || []).slice(0, 30);
-  return { buckets, examples, bans };
+  return { buckets: combinedBuckets, examples, bans };
 }
 
 /**
@@ -127,7 +170,8 @@ export async function generateAIComment(params: GenerateCommentParams): Promise<
   }
 
   const bank = loadCommentBank();
-  const bankPick = pickExamples(bank, style);
+  const contextText = `${streamTitle ?? ""}\n${audioTranscript ?? ""}\n${screenDescription ?? ""}`;
+  const bankPick = pickExamples(bank, style, contextText);
   
   // Build the system prompt
   const systemPrompt = buildSystemPrompt({
@@ -289,6 +333,7 @@ ${bankVoice ? `\n**Voice**: ${bankVoice}` : ""}
 - Do not be spammy or promotional
 - Do not include hashtags
 - Do not mention being an AI or referencing a prompt/screenshot/audio
+- Do not use slurs, hate speech, or calls for violence
 `;
 
   if (streamerName) {

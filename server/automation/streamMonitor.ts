@@ -43,6 +43,8 @@ export interface MonitorSession {
   intervalId?: NodeJS.Timeout;
   audioIntervalId?: NodeJS.Timeout;
   audioCaptureInProgress?: boolean;
+  commentInProgress?: boolean;
+  lastPostAccountId?: number;
   lastComment?: string;
   lastCommentTime?: Date;
   lastAudioTranscript?: string;
@@ -92,15 +94,17 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     
     const page = await browser.newPage();
     await page.setViewportSize({ width: 1280, height: 720 });
+    page.setDefaultTimeout(60000);
+    page.setDefaultNavigationTimeout(60000);
     
     // Navigate to stream
     console.log(`[StreamMonitor] Navigating to ${config.streamUrl}`);
     try {
-      await page.goto(config.streamUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.goto(config.streamUrl, { waitUntil: 'networkidle', timeout: 60000 });
     } catch (navError) {
       // If networkidle times out, try with domcontentloaded instead
       console.warn(`[StreamMonitor] Network idle timeout, trying with domcontentloaded`);
-      await page.goto(config.streamUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.goto(config.streamUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     }
     
     // Check if page loaded successfully
@@ -159,6 +163,10 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
   if (session.status !== 'running' || !session.page) {
     return;
   }
+
+  // Prevent overlapping comment generations (can cause screenshot timeouts).
+  if (session.commentInProgress) return;
+  session.commentInProgress = true;
   
   const { config } = session;
   
@@ -172,6 +180,7 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
       const screenshot = await session.page.screenshot({ 
         type: 'jpeg', 
         quality: 60,
+        timeout: 60000,
       });
       screenImageBase64 = screenshot.toString('base64');
       
@@ -179,6 +188,19 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
       console.log(`[StreamMonitor] Screenshot captured, will be analyzed by AI`);
     } catch (err) {
       console.error(`[StreamMonitor] Screenshot failed:`, err);
+      // Retry once with a quick reload and a shorter wait (best effort).
+      try {
+        await session.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+        const screenshot = await session.page.screenshot({
+          type: 'jpeg',
+          quality: 55,
+          timeout: 60000,
+        });
+        screenImageBase64 = screenshot.toString('base64');
+        console.log(`[StreamMonitor] Screenshot captured on retry, will be analyzed by AI`);
+      } catch (retryErr) {
+        console.error(`[StreamMonitor] Screenshot retry failed:`, retryErr);
+      }
     }
     
     // Get recent audio transcript if available
@@ -234,6 +256,7 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
         account.cookies,
         proxyUrl
       );
+      session.lastPostAccountId = account.id;
       console.log(
         `[StreamMonitor] Posted comment via account: ${account.accountName}${
           proxyUrl ? " (using proxy)" : ""
@@ -284,6 +307,9 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
       message: `AI comment failed: ${errorMsg}`,
       metadata: JSON.stringify({ sessionId: session.id }),
     });
+  }
+  finally {
+    session.commentInProgress = false;
   }
 }
 
@@ -482,6 +508,21 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
   
   try {
     console.log(`[StreamMonitor] Capturing audio for session ${session.id}`);
+
+    // Use an active account's cookies + proxy to help yt-dlp avoid 403/blocks.
+    const accounts = await getAccountsByUserId(config.userId);
+    const availableAccounts = accounts.filter(a =>
+      config.accountIds.includes(a.id) &&
+      a.platform === config.platform &&
+      a.isActive === true
+    );
+    const preferred =
+      (session.lastPostAccountId
+        ? availableAccounts.find(a => a.id === session.lastPostAccountId)
+        : undefined) || availableAccounts[0];
+    const cookieString = preferred?.cookies;
+    const proxyUrl =
+      preferred?.proxy || (preferred ? getIProyalProxyUrlForAccount(preferred.id) : undefined);
     
     // Capture audio from the stream
     let audio:
@@ -494,6 +535,10 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
         page: session.page,
         duration: config.audioInterval,
         streamUrl: config.streamUrl,
+        cookieString,
+        proxyUrl,
+        userAgent:
+          "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       });
       
       audio = {

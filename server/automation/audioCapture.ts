@@ -8,7 +8,7 @@
 import { Page } from 'playwright';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, readFile, rm, mkdtemp } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -132,6 +132,9 @@ export interface AudioCaptureConfig {
   page: Page;
   duration: number;        // How long to capture (in seconds)
   streamUrl: string;       // The stream URL for direct audio extraction
+  cookieString?: string;  // Optional: cookies to help bypass blocks
+  proxyUrl?: string;      // Optional: proxy to use for yt-dlp fetching
+  userAgent?: string;     // Optional: override UA for yt-dlp
 }
 
 export interface AudioCaptureResult {
@@ -234,6 +237,67 @@ async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
   return url;
 }
 
+async function downloadYtDlpDirect(binPath: string): Promise<void> {
+  // Direct download fallback (more reliable than yt-dlp-wrap in locked environments).
+  const platform = os.platform();
+  const url =
+    platform === 'win32'
+      ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+      : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'user-agent': 'comment-bot-mvp/1.0 (+yt-dlp)' },
+    });
+    if (!res.ok) {
+      throw new Error(`yt-dlp download failed: ${res.status} ${res.statusText}`);
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    await writeFile(binPath, buf);
+    if (platform !== 'win32') {
+      await chmod(binPath, 0o755);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function ensureYtDlpBinary(): Promise<string> {
+  const binDir = path.join(os.tmpdir(), 'comment-bot-bin');
+  await mkdir(binDir, { recursive: true });
+  const binName = os.platform() === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+  const binPath = path.join(binDir, binName);
+
+  if (existsSync(binPath)) return binPath;
+
+  console.log(`[AudioCapture] Downloading yt-dlp binary to ${binPath}`);
+  await downloadYtDlpDirect(binPath);
+
+  if (!existsSync(binPath)) {
+    throw new Error(`yt-dlp binary is missing after download attempt (${binPath})`);
+  }
+  return binPath;
+}
+
+function buildYtDlpArgs(streamUrl: string, opts: { proxyUrl?: string; cookieString?: string; userAgent?: string }) {
+  const args: string[] = ['-g', '-f', 'bestaudio/best', '--no-playlist', '--no-warnings'];
+  if (opts.userAgent) {
+    args.push('--user-agent', opts.userAgent);
+  }
+  if (opts.proxyUrl) {
+    args.push('--proxy', opts.proxyUrl);
+  }
+  if (opts.cookieString) {
+    // yt-dlp supports adding headers; this helps with authenticated/CF-protected content.
+    args.push('--add-header', `Cookie: ${opts.cookieString}`);
+  }
+  args.push(streamUrl);
+  return args;
+}
+
 /**
  * Capture audio from a live stream using ffmpeg
  * 
@@ -241,11 +305,22 @@ async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
  * Works for both Rumble and YouTube streams
  */
 export async function captureStreamAudio(config: AudioCaptureConfig): Promise<AudioCaptureResult> {
-  const { duration, streamUrl } = config;
+  const { duration, streamUrl, cookieString, proxyUrl, userAgent } = config;
   
   try {
     console.log(`[AudioCapture] Resolving media URL via yt-dlp for ${streamUrl}`);
-    const mediaUrl = await resolveMediaUrlWithYtDlp(streamUrl);
+    // Prefer our direct-downloaded yt-dlp binary for reliability on Render.
+    const ytdlpPath = await ensureYtDlpBinary();
+    const { stdout } = await execFileWithRetries(
+      ytdlpPath,
+      buildYtDlpArgs(streamUrl, { proxyUrl, cookieString, userAgent }),
+      { timeoutMs: 90_000, retries: 2, retryDelayMs: 600 }
+    );
+    const mediaUrl = stdout
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .find(Boolean);
+    if (!mediaUrl) throw new Error('yt-dlp returned no media URL');
     console.log(`[AudioCapture] Resolved media URL: ${mediaUrl.slice(0, 160)}...`);
 
     const ffmpeg = await resolveBinaryPath('ffmpeg-static', 'ffmpeg');
