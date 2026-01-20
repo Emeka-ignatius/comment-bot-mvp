@@ -51,6 +51,22 @@ MOCK_AUTOMATION=false
 # Set to 'true' for testing without real API calls
 
 # ============================================
+# OPTIONAL: iProyal Residential proxy (recommended for multi-account)
+# ============================================
+# If set, the system will automatically generate a sticky session per account
+# (no manual proxy entry required) and route Rumble posting through it.
+IPROYAL_HOST=geo.iproyal.com
+IPROYAL_PORT=12321
+IPROYAL_USERNAME=
+IPROYAL_PASSWORD=
+# Sticky session lifetime per account (1s..7d). Example: 2h, 30m, 1d
+IPROYAL_SESSION_LIFETIME=2h
+# Optional geo targeting (leave blank if you don't want to lock to a region)
+IPROYAL_COUNTRY=
+IPROYAL_STATE=
+IPROYAL_CITY=
+
+# ============================================
 # OPTIONAL: Puppeteer Configuration
 # ============================================
 PUPPETEER_EXECUTABLE_PATH=

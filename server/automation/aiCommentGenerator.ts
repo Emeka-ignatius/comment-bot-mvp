@@ -8,6 +8,8 @@
  */
 
 import { invokeLLM, type Message } from "../_core/llm";
+import fs from "node:fs";
+import path from "node:path";
 
 export type CommentStyle = 
   | 'engaging'      // Questions, reactions, enthusiasm
@@ -46,6 +48,61 @@ export interface GeneratedComment {
   reasoning?: string;              // Why this comment was generated
 }
 
+type CommentBank = {
+  version: number;
+  voice: string;
+  buckets: Record<string, string[]>;
+  hard_bans?: string[];
+};
+
+let cachedCommentBank: CommentBank | null = null;
+
+function loadCommentBank(): CommentBank | null {
+  if (cachedCommentBank) return cachedCommentBank;
+  try {
+    const p = path.resolve(process.cwd(), "server", "automation", "commentBank.genz.json");
+    const raw = fs.readFileSync(p, "utf-8");
+    cachedCommentBank = JSON.parse(raw) as CommentBank;
+    return cachedCommentBank;
+  } catch {
+    return null;
+  }
+}
+
+function pickExamples(bank: CommentBank | null, style: CommentStyle): { buckets: string[]; examples: string[]; bans: string[] } {
+  if (!bank) return { buckets: [], examples: [], bans: [] };
+
+  // Map our UI style to a few relevant buckets (model can still choose the final vibe).
+  const styleToBuckets: Record<CommentStyle, string[]> = {
+    engaging: ["hype", "react_shock", "react_funny", "chat_bait_questions", "short_fillers"],
+    supportive: ["supportive", "hype", "short_fillers"],
+    curious: ["chat_bait_questions", "react_shock", "short_fillers"],
+    casual: ["react_funny", "short_fillers", "meta_reacting_to_stream"],
+    professional: ["supportive"], // keep it safer; still short
+    hype: ["hype", "short_fillers", "react_shock"],
+    question: ["chat_bait_questions"],
+    agreement: ["short_fillers", "supportive"]
+  };
+
+  const buckets = styleToBuckets[style] || [];
+  const pool: string[] = [];
+  for (const b of buckets) {
+    const items = bank.buckets?.[b] || [];
+    pool.push(...items);
+  }
+
+  // Randomly sample up to 10 examples
+  const examples: string[] = [];
+  const copy = [...pool];
+  while (examples.length < 10 && copy.length > 0) {
+    const idx = Math.floor(Math.random() * copy.length);
+    examples.push(copy.splice(idx, 1)[0]);
+  }
+
+  const bans = (bank.hard_bans || []).slice(0, 30);
+  return { buckets, examples, bans };
+}
+
 /**
  * Generate a contextual comment using LLM
  */
@@ -58,7 +115,7 @@ export async function generateAIComment(params: GenerateCommentParams): Promise<
     streamerName,
     platform,
     style = 'engaging',
-    maxLength = 200,
+    maxLength = 60,
     avoidTopics = [],
     includeEmojis = true,
     previousComments = [],
@@ -68,6 +125,9 @@ export async function generateAIComment(params: GenerateCommentParams): Promise<
   if (audioTranscript && audioTranscript.length < 5) {
     console.warn('[AICommentGenerator] Audio transcript too short, may be low quality');
   }
+
+  const bank = loadCommentBank();
+  const bankPick = pickExamples(bank, style);
   
   // Build the system prompt
   const systemPrompt = buildSystemPrompt({
@@ -77,6 +137,10 @@ export async function generateAIComment(params: GenerateCommentParams): Promise<
     includeEmojis,
     platform,
     streamerName,
+    bankVoice: bank?.voice,
+    bankBuckets: bankPick.buckets,
+    bankExamples: bankPick.examples,
+    hardBans: bankPick.bans,
   });
   
   // Build the user message with context
@@ -178,35 +242,54 @@ function buildSystemPrompt(opts: {
   includeEmojis: boolean;
   platform: string;
   streamerName?: string;
+  bankVoice?: string;
+  bankBuckets?: string[];
+  bankExamples?: string[];
+  hardBans?: string[];
 }): string {
-  const { style, maxLength, avoidTopics, includeEmojis, platform, streamerName } = opts;
+  const {
+    style,
+    maxLength,
+    avoidTopics,
+    includeEmojis,
+    platform,
+    streamerName,
+    bankVoice,
+    bankBuckets = [],
+    bankExamples = [],
+    hardBans = [],
+  } = opts;
   
   const styleDescriptions = {
-    engaging: "Be enthusiastic, ask questions, and show genuine interest. React to exciting moments. Use lots of emojis! 🔥 Use stream-specific language like 'no cap', 'fr fr', 'bussin', 'slay', 'ate', etc.",
-    supportive: "Be positive and encouraging. Compliment the streamer and support their content. Use emojis like 💪 ❤️ 🙌. Use phrases like 'keep it up', 'you got this', 'fire content'.",
+    engaging: "Be enthusiastic and reactive like real streamer chat. Use slang and keep it short.",
+    supportive: "Be positive and encouraging, but still casual and not polished.",
     curious: "Ask thoughtful questions about what's happening. Show interest in learning more. Use curious emojis like 🤔 ❓ 👀. Ask 'what's next?', 'how did you...?', 'why did you...?'",
-    casual: "Be relaxed and conversational. Use casual language like you're chatting with a friend. Use emojis freely 😂 💯 👏. Use slang like 'lol', 'ngl', 'lowkey', 'highkey', 'bet'.",
-    professional: "Be formal and informative. Provide constructive feedback or insights. Use professional emojis like 📊 💼 ✅. Use phrases like 'great point', 'well explained', 'impressive work'.",
-    hype: "GO CRAZY! Maximum energy and excitement! Use LOTS of fire emojis and hype language. Say things like LETS GOOOO, BUSSIN FR FR, SLAY, NO CAP, FIRE, GOATED, INSANE. Be LOUD and EXCITED!",
-    question: "Ask engaging, thought-provoking questions that make viewers think. Use emojis like thinking face and question mark. Ask about opinions, predictions, or deeper topics. Make people want to answer.",
-    agreement: "Validate what's happening and show consensus. Use emojis like checkmark and thumbs up. Say things like facts, facts no cap, you right, agreed, exactly, this is it, period.",
+    casual: "Be relaxed streamer chat. Short lines, slang, occasional lowercase.",
+    professional: "Keep it clean and short, like a normal viewer. No corporate tone.",
+    hype: "High energy and excitement like gaming chat. Keep it punchy.",
+    question: "Ask chat-bait questions that invite replies (W/L, 1-10, what would you do?).",
+    agreement: "Short agreement/validation like real chat (facts, real, W).",
   };
   
-  let prompt = `You are a helpful assistant that generates natural, contextual comments for ${platform} live streams.
+  let prompt = `You generate a single chat message for a ${platform} live stream.
 
-Your task is to generate a single comment that feels authentic, engaging, and like it came from a real viewer.
+The message must feel like it came from a real viewer in a live chat (NOT a bot, NOT an AI).
 
 **Style**: ${styleDescriptions[style]}
+${bankVoice ? `\n**Voice**: ${bankVoice}` : ""}
 
 **Requirements**:
 - Maximum ${maxLength} characters
-- ${includeEmojis ? 'USE LOTS OF RELEVANT EMOJIS! 🎉 😂 🔥 💯 👀 etc.' : 'Do NOT use emojis'}
-- Sound like a real viewer, NOT a bot or AI
-- Be specific and contextual to what's happening
-- Use modern internet slang and stream culture language
-- Don't be overly promotional or spammy
-- React emotionally and authentically
-- Keep it short and punchy`;
+- ${includeEmojis ? "Use 2-4 relevant emojis (not 0, not 6+)." : "Do NOT use emojis"}
+- Prefer 6-60 characters most of the time (still obey max)
+- Use Gen Z streamer chat slang (bruh/nahh/W/L/lock in/cooked/fr/lowkey)
+- Can be imperfect: fragments, lowercase, mild typos are OK
+- Do not be formal, do not explain, do not narrate
+- Avoid sounding like a template
+- Do not be spammy or promotional
+- Do not include hashtags
+- Do not mention being an AI or referencing a prompt/screenshot/audio
+`;
 
   if (streamerName) {
     prompt += `\n- You can address the streamer as "${streamerName}"`;
@@ -214,6 +297,17 @@ Your task is to generate a single comment that feels authentic, engaging, and li
 
   if (avoidTopics.length > 0) {
     prompt += `\n- AVOID mentioning these topics: ${avoidTopics.join(', ')}`;
+  }
+
+  if (hardBans.length > 0) {
+    prompt += `\n- HARD BAN: do not use these phrases (case-insensitive): ${hardBans.join(", ")}`;
+  }
+
+  if (bankExamples.length > 0) {
+    prompt += `\n\n**Real chat pattern examples (do NOT copy verbatim; mimic vibe + pacing):**\n- ${bankExamples.join("\n- ")}\n`;
+    if (bankBuckets.length > 0) {
+      prompt += `\n(Examples sourced from buckets: ${bankBuckets.join(", ")})\n`;
+    }
   }
 
   prompt += `\n\n**Confidence Scoring**:
@@ -261,10 +355,10 @@ function buildUserMessage(opts: {
   }
   
   if (!audioTranscript && !screenDescription) {
-    message += "**Note**: No specific context available. Generate a general engaging comment that would work for most streams. Use lots of emojis and energy!\n\n";
+    message += "**Note**: No specific context available. Generate a general chat message that fits gaming/reaction streams.\n\n";
   }
   
-  message += "Now generate a comment that feels like it came from a real, engaged viewer. Make it authentic and fun!";
+  message += "Now generate ONE message that feels like real chat. Keep it human and non-repetitive.";
   
   return message;
 }

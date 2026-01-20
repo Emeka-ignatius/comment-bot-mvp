@@ -12,6 +12,7 @@ import {
 } from "./directRumbleAPI";
 import { submitRumbleComment as submitRumbleCommentMock } from "./mockRumble";
 import { submitYouTubeComment as submitYouTubeCommentMock } from "./mockYoutube";
+import { getIProyalProxyUrlForAccount } from "./iproyal";
 
 interface JobExecutionContext {
   jobId: number;
@@ -236,10 +237,14 @@ async function executeJob(context: JobExecutionContext) {
           `[JobQueue] Using Direct Rumble API with chat ID: ${chatId}`
         );
 
+        const proxyUrl =
+          accountData.proxy || getIProyalProxyUrlForAccount(accountData.id) || undefined;
+
         const rumbleResult = await postRumbleCommentDirect(
           chatId,
           commentData.content,
-          accountData.cookies
+          accountData.cookies,
+          proxyUrl
         );
 
         console.log("[JobQueue] postRumbleComment result:", rumbleResult);

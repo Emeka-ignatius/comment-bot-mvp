@@ -11,6 +11,7 @@ import { postRumbleCommentDirect } from './directRumbleAPI';
 import { createJob, getAccountsByUserId, getVideosByUserId, createLog } from '../db';
 import { captureStreamAudio, capturePageContextAudio } from './audioCapture';
 import { transcribeStreamAudio, detectCallToAction, summarizeTranscript } from './audioTranscriber';
+import { getIProyalProxyUrlForAccount } from "./iproyal";
 
 export interface StreamMonitorConfig {
   videoId: number;                    // Video ID from database
@@ -225,8 +226,19 @@ async function generateAndPostComment(session: MonitorSession): Promise<void> {
     
     // Post the comment
     if (config.platform === 'rumble') {
-      await postRumbleCommentDirect(config.chatId, result.comment, account.cookies, account.proxy || undefined);
-      console.log(`[StreamMonitor] Posted comment via account: ${account.accountName}${account.proxy ? ' (using proxy)' : ''}`);
+      const proxyUrl =
+        account.proxy || getIProyalProxyUrlForAccount(account.id) || undefined;
+      await postRumbleCommentDirect(
+        config.chatId,
+        result.comment,
+        account.cookies,
+        proxyUrl
+      );
+      console.log(
+        `[StreamMonitor] Posted comment via account: ${account.accountName}${
+          proxyUrl ? " (using proxy)" : ""
+        }`
+      );
     } else {
       // YouTube posting would go here
       console.log(`[StreamMonitor] YouTube posting not yet implemented`);

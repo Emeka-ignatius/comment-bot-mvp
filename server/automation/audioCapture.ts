@@ -8,7 +8,7 @@
 import { Page } from 'playwright';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rm, mkdtemp } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -109,6 +109,25 @@ const execFileWithRetries = async (
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 };
 
+const formatUnknownError = (err: unknown): string => {
+  if (err instanceof Error) return err.stack || err.message;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+};
+
+async function commandExists(command: string): Promise<boolean> {
+  try {
+    // Works on most Linux images; if it fails, we assume command not available.
+    await execFile(command, ['--version'], { timeoutMs: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface AudioCaptureConfig {
   page: Page;
   duration: number;        // How long to capture (in seconds)
@@ -135,6 +154,7 @@ async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
   }
 
   // Prefer yt-dlp-wrap (downloads yt-dlp at runtime; no system install required).
+  let lastWrapError: unknown;
   try {
     const mod: any = await import('yt-dlp-wrap');
     // In ESM, this package exports an object with `default.default` as the constructor.
@@ -151,7 +171,28 @@ async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
     // yt-dlp-wrap does not auto-download yt-dlp; we download it to our bin path if missing.
     if (!existsSync(binPath) && typeof YTDlpWrap.downloadFromGithub === 'function') {
       console.log(`[AudioCapture] Downloading yt-dlp binary to ${binPath}`);
-      await YTDlpWrap.downloadFromGithub(binPath);
+      try {
+        await YTDlpWrap.downloadFromGithub(binPath);
+      } catch (err) {
+        // Sometimes this lib throws non-Error objects; keep the error for logging, but still
+        // proceed if the file exists (partial downloads can still succeed).
+        lastWrapError = err;
+      }
+    }
+
+    if (!existsSync(binPath)) {
+      throw new Error(
+        `yt-dlp binary is missing after download attempt (${binPath}). Error: ${formatUnknownError(lastWrapError)}`
+      );
+    }
+
+    // On Linux/macOS, ensure the binary is executable.
+    if (os.platform() !== 'win32') {
+      try {
+        await chmod(binPath, 0o755);
+      } catch {
+        // best effort
+      }
     }
 
     const { stdout } = await execFileWithRetries(
@@ -168,14 +209,17 @@ async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
     resolvedUrlCache.set(streamUrl, { url, ts: Date.now() });
     return url;
   } catch (err) {
-    console.warn(
-      `[AudioCapture] yt-dlp-wrap failed, falling back to system yt-dlp: ${
-        err instanceof Error ? err.message : String(err)
-      }`
+    lastWrapError = err;
+    console.warn(`[AudioCapture] yt-dlp-wrap flow failed: ${formatUnknownError(err)}`);
+  }
+
+  // Fallback: system yt-dlp only if present
+  if (!(await commandExists('yt-dlp'))) {
+    throw new Error(
+      `Audio capture requires yt-dlp. yt-dlp-wrap download failed and no system yt-dlp was found in PATH. Details: ${formatUnknownError(lastWrapError)}`
     );
   }
 
-  // Fallback: system yt-dlp if present
   const { stdout } = await execFileWithRetries(
     'yt-dlp',
     ['-g', '-f', 'bestaudio/best', '--no-playlist', '--no-warnings', streamUrl],
