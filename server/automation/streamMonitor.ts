@@ -45,6 +45,8 @@ export interface MonitorSession {
   audioCaptureInProgress?: boolean;
   commentInProgress?: boolean;
   lastPostAccountId?: number;
+  lastMediaUrl?: string;
+  lastMediaUrlTime?: Date;
   lastComment?: string;
   lastCommentTime?: Date;
   lastAudioTranscript?: string;
@@ -96,6 +98,32 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     await page.setViewportSize({ width: 1280, height: 720 });
     page.setDefaultTimeout(60000);
     page.setDefaultNavigationTimeout(60000);
+
+    // Capture HLS/DASH media URLs from the page network so we can avoid yt-dlp (often blocked by CF).
+    page.on('request', req => {
+      try {
+        const url = req.url();
+        if (!url.startsWith('http')) return;
+        // HLS/DASH manifests are the best inputs for ffmpeg capture.
+        const isManifest =
+          url.includes('.m3u8') ||
+          url.includes('.mpd') ||
+          url.includes('manifest') ||
+          url.includes('hls');
+        if (!isManifest) return;
+        // Prefer m3u8; otherwise keep latest seen.
+        const shouldReplace =
+          !session.lastMediaUrl ||
+          (url.includes('.m3u8') && !session.lastMediaUrl.includes('.m3u8')) ||
+          (session.lastMediaUrlTime ? Date.now() - session.lastMediaUrlTime.getTime() > 60_000 : true);
+        if (!shouldReplace) return;
+        session.lastMediaUrl = url;
+        session.lastMediaUrlTime = new Date();
+        console.log(`[StreamMonitor] Detected media URL: ${url.slice(0, 180)}...`);
+      } catch {
+        // ignore
+      }
+    });
     
     // Navigate to stream
     console.log(`[StreamMonitor] Navigating to ${config.streamUrl}`);
@@ -530,8 +558,15 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
       | undefined;
     
     try {
+      // If we already saw a media manifest URL in the browser, prefer that.
+      const mediaUrl = session.lastMediaUrl;
+      if (mediaUrl) {
+        console.log(`[StreamMonitor] Using detected media URL for audio capture`);
+      }
+
       // Try to capture audio using ffmpeg approach
-      const audioResult = await captureStreamAudio({
+      // Construct config in a way that avoids excess-property TS diagnostics in some environments.
+      const captureCfg: any = {
         page: session.page,
         duration: config.audioInterval,
         streamUrl: config.streamUrl,
@@ -539,7 +574,10 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
         proxyUrl,
         userAgent:
           "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      });
+      };
+      if (mediaUrl) captureCfg.mediaUrl = mediaUrl;
+
+      const audioResult = await captureStreamAudio(captureCfg);
       
       audio = {
         audioBuffer: audioResult.audioBuffer,

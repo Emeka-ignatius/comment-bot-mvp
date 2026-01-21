@@ -132,9 +132,12 @@ export interface AudioCaptureConfig {
   page: Page;
   duration: number;        // How long to capture (in seconds)
   streamUrl: string;       // The stream URL for direct audio extraction
+  mediaUrl?: string;       // Optional: already-resolved media URL (e.g., .m3u8) from browser context
   cookieString?: string;  // Optional: cookies to help bypass blocks
   proxyUrl?: string;      // Optional: proxy to use for yt-dlp fetching
   userAgent?: string;     // Optional: override UA for yt-dlp
+  // Allow forward-compatible fields (prevents excess-property diagnostics in some TS/lint setups).
+  [key: string]: unknown;
 }
 
 export interface AudioCaptureResult {
@@ -149,6 +152,43 @@ export interface AudioCaptureResult {
 type CachedResolvedUrl = { url: string; ts: number };
 const resolvedUrlCache = new Map<string, CachedResolvedUrl>();
 const RESOLVED_URL_TTL_MS = 5 * 60 * 1000;
+
+function parseCookieString(cookieString: string): Array<{ name: string; value: string }> {
+  return cookieString
+    .split(";")
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(pair => {
+      const idx = pair.indexOf("=");
+      if (idx <= 0) return null;
+      const name = pair.slice(0, idx).trim();
+      const value = pair.slice(idx + 1).trim();
+      if (!name) return null;
+      return { name, value };
+    })
+    .filter((x): x is { name: string; value: string } => Boolean(x));
+}
+
+async function writeNetscapeCookiesFile(opts: {
+  cookieString: string;
+  filePath: string;
+  domains?: string[];
+}): Promise<void> {
+  const domains = opts.domains?.length ? opts.domains : [".rumble.com", "rumble.com"];
+  const cookies = parseCookieString(opts.cookieString);
+
+  const header = "# Netscape HTTP Cookie File\n";
+  const lines: string[] = [header.trimEnd()];
+  for (const domain of domains) {
+    for (const c of cookies) {
+      // domain, includeSubdomains, path, secure, expires, name, value
+      // Expires "0" means session cookie.
+      lines.push([domain, "TRUE", "/", "FALSE", "0", c.name, c.value].join("\t"));
+    }
+  }
+  lines.push(""); // trailing newline
+  await writeFile(opts.filePath, lines.join("\n"), "utf-8");
+}
 
 async function resolveMediaUrlWithYtDlp(streamUrl: string): Promise<string> {
   const cached = resolvedUrlCache.get(streamUrl);
@@ -290,12 +330,71 @@ function buildYtDlpArgs(streamUrl: string, opts: { proxyUrl?: string; cookieStri
   if (opts.proxyUrl) {
     args.push('--proxy', opts.proxyUrl);
   }
-  if (opts.cookieString) {
-    // yt-dlp supports adding headers; this helps with authenticated/CF-protected content.
-    args.push('--add-header', `Cookie: ${opts.cookieString}`);
-  }
+  // Some sites (including Rumble) are picky about headers.
+  args.push('--add-header', `Referer: ${streamUrl}`);
+  args.push('--add-header', 'Accept-Language: en-US,en;q=0.9');
   args.push(streamUrl);
   return args;
+}
+
+function safeProxyLabel(proxyUrl?: string): string | undefined {
+  if (!proxyUrl) return undefined;
+  try {
+    const u = new URL(proxyUrl);
+    return `${u.hostname}:${u.port || (u.protocol === 'https:' ? '443' : '80')}`;
+  } catch {
+    // Fallback for non-URL formats
+    return proxyUrl.split('@').pop();
+  }
+}
+
+async function runFfmpegCapture(opts: {
+  mediaUrl: string;
+  duration: number;
+  tmpDir: string;
+  proxyUrl?: string;
+}): Promise<{ audioPath: string }> {
+  const ffmpeg = await resolveBinaryPath('ffmpeg-static', 'ffmpeg');
+  const filename = `audio_${Date.now()}.wav`;
+  const audioPath = path.join(opts.tmpDir, filename);
+
+  const ffmpegArgs: string[] = [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+  ];
+
+  // If a proxy is provided, try to apply it for HTTP inputs.
+  // (Works for many ffmpeg builds; if unsupported it will error and we’ll fall back.)
+  if (opts.proxyUrl) {
+    ffmpegArgs.push('-http_proxy', opts.proxyUrl);
+  }
+
+  ffmpegArgs.push(
+    '-i',
+    opts.mediaUrl,
+    '-t',
+    String(opts.duration),
+    '-vn',
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-f',
+    'wav',
+    audioPath
+  );
+
+  console.log(
+    `[AudioCapture] Running ffmpeg (${ffmpeg.name}) for ${opts.duration}s${opts.proxyUrl ? ` (proxy ${safeProxyLabel(opts.proxyUrl)})` : ''}`
+  );
+  await execFile(ffmpeg.path, ffmpegArgs, { timeoutMs: (opts.duration + 45) * 1000 });
+
+  if (!existsSync(audioPath)) {
+    throw new Error('ffmpeg finished but no audio file was created');
+  }
+  return { audioPath };
 }
 
 /**
@@ -305,57 +404,62 @@ function buildYtDlpArgs(streamUrl: string, opts: { proxyUrl?: string; cookieStri
  * Works for both Rumble and YouTube streams
  */
 export async function captureStreamAudio(config: AudioCaptureConfig): Promise<AudioCaptureResult> {
-  const { duration, streamUrl, cookieString, proxyUrl, userAgent } = config;
-  
+  const { duration, streamUrl, mediaUrl: mediaUrlOverride, cookieString, proxyUrl, userAgent } = config;
+  let tmpDir: string | null = null;
+  let cookieFilePath: string | null = null;
   try {
-    console.log(`[AudioCapture] Resolving media URL via yt-dlp for ${streamUrl}`);
-    // Prefer our direct-downloaded yt-dlp binary for reliability on Render.
-    const ytdlpPath = await ensureYtDlpBinary();
-    const { stdout } = await execFileWithRetries(
-      ytdlpPath,
-      buildYtDlpArgs(streamUrl, { proxyUrl, cookieString, userAgent }),
-      { timeoutMs: 90_000, retries: 2, retryDelayMs: 600 }
-    );
-    const mediaUrl = stdout
-      .split(/\r?\n/)
-      .map(s => s.trim())
-      .find(Boolean);
-    if (!mediaUrl) throw new Error('yt-dlp returned no media URL');
-    console.log(`[AudioCapture] Resolved media URL: ${mediaUrl.slice(0, 160)}...`);
-
-    const ffmpeg = await resolveBinaryPath('ffmpeg-static', 'ffmpeg');
-
-    const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'comment-bot-audio-'));
-    const filename = `audio_${Date.now()}.wav`;
-    const audioPath = path.join(tmpDir, filename);
-
-    // Use ffmpeg to extract audio from the resolved media URL.
-    // WAV PCM is reliable across ffmpeg builds (no codec surprises).
-    const ffmpegArgs = [
-      '-hide_banner',
-      '-loglevel',
-      'error',
-      '-y',
-      '-i',
-      mediaUrl,
-      '-t',
-      String(duration),
-      '-vn',
-      '-ac',
-      '1',
-      '-ar',
-      '16000',
-      '-f',
-      'wav',
-      audioPath,
-    ];
-
-    console.log(`[AudioCapture] Running ffmpeg (${ffmpeg.name}) for ${duration}s`);
-    await execFile(ffmpeg.path, ffmpegArgs, { timeoutMs: (duration + 45) * 1000 });
-
-    if (!existsSync(audioPath)) {
-      throw new Error('ffmpeg finished but no audio file was created');
+    if (!tmpDir) {
+      tmpDir = await mkdtemp(path.join(os.tmpdir(), 'comment-bot-audio-'));
     }
+
+    let mediaUrl = mediaUrlOverride;
+
+    // If we don't have a media URL from the browser, resolve it using yt-dlp (can be blocked by CF).
+    if (!mediaUrl) {
+      console.log(
+        `[AudioCapture] Resolving media URL via yt-dlp for ${streamUrl}` +
+          (proxyUrl ? ` (proxy ${safeProxyLabel(proxyUrl)})` : '') +
+          (cookieString ? ' (cookies provided)' : '')
+      );
+      // Prefer our direct-downloaded yt-dlp binary for reliability on Render.
+      const ytdlpPath = await ensureYtDlpBinary();
+
+      // If we have cookies, prefer passing them via a cookie file (avoids yt-dlp warning and is more reliable).
+      if (cookieString) {
+        cookieFilePath = path.join(tmpDir, `cookies_${Date.now()}.txt`);
+        await writeNetscapeCookiesFile({
+          cookieString,
+          filePath: cookieFilePath,
+          domains: [".rumble.com", "rumble.com", ".wn0.rumble.com", "wn0.rumble.com"],
+        });
+      }
+
+      const baseArgs = buildYtDlpArgs(streamUrl, { proxyUrl, userAgent });
+      const args = cookieFilePath
+        ? [...baseArgs.slice(0, -1), '--cookies', cookieFilePath, baseArgs[baseArgs.length - 1]]
+        : baseArgs;
+
+      const { stdout } = await execFileWithRetries(ytdlpPath, args, {
+        timeoutMs: 90_000,
+        retries: 2,
+        retryDelayMs: 600,
+      });
+      mediaUrl = stdout
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .find(Boolean);
+      if (!mediaUrl) throw new Error('yt-dlp returned no media URL');
+      console.log(`[AudioCapture] Resolved media URL: ${mediaUrl.slice(0, 160)}...`);
+    } else {
+      console.log(`[AudioCapture] Using browser-detected media URL: ${mediaUrl.slice(0, 160)}...`);
+    }
+
+    const { audioPath } = await runFfmpegCapture({
+      mediaUrl,
+      duration,
+      tmpDir,
+      proxyUrl,
+    });
 
     const audioBuffer = await readFile(audioPath);
     
@@ -371,7 +475,7 @@ export async function captureStreamAudio(config: AudioCaptureConfig): Promise<Au
     return {
       audioBuffer,
       mimeType: 'audio/wav',
-      filename,
+      filename: path.basename(audioPath),
       duration,
       fileSize: audioBuffer.length,
     };
@@ -379,6 +483,11 @@ export async function captureStreamAudio(config: AudioCaptureConfig): Promise<Au
   } catch (error) {
     console.error(`[AudioCapture] Failed to capture audio:`, error);
     throw error;
+  } finally {
+    // If we created a temp dir but failed before returning, clean it up.
+    if (tmpDir) {
+      rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 }
 

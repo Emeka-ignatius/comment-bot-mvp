@@ -10,6 +10,15 @@ import { serveStatic, setupVite } from "./vite";
 import { startJobQueue } from "../automation/jobQueue";
 import { ENV } from "./env";
 
+// Crash guards: Render will restart the service if the process exits.
+// These handlers help us *see* why the process is dying (unhandled promise, uncaught error, etc).
+process.on("unhandledRejection", reason => {
+  console.error("[Process] unhandledRejection:", reason);
+});
+process.on("uncaughtException", err => {
+  console.error("[Process] uncaughtException:", err);
+});
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -32,6 +41,21 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  let shuttingDown = false;
+
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[Process] ${signal} received, shutting down...`);
+    server.close(() => {
+      console.log("[Process] HTTP server closed");
+      process.exit(0);
+    });
+    // Force-exit if close hangs.
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
   
   // CORS middleware for credentials
   app.use((req, res, next) => {
