@@ -60,6 +60,95 @@ export interface MonitorSession {
 // Active monitor sessions
 const activeSessions = new Map<string, MonitorSession>();
 
+function pickBestMediaUrl(urls: string[]): string | undefined {
+  const cleaned = urls
+    .map(u => u.trim())
+    .filter(Boolean)
+    .filter(u => u.startsWith("http"))
+    .filter(u => !u.includes("hls.js"));
+  if (cleaned.length === 0) return undefined;
+
+  const score = (u: string) => {
+    let s = 0;
+    if (u.includes(".m3u8")) s += 50;
+    if (u.includes("chunklist")) s += 20;
+    if (u.includes("playlist.m3u8")) s += 15;
+    if (u.includes("live-hls")) s += 10;
+    if (u.includes("dvr")) s += 5;
+    // Prefer non-rumble CDN URLs if present (often direct playlist/chunklist).
+    if (!u.includes("rumble.com/")) s += 3;
+    // Slight preference for longer URLs (often includes tokens/params).
+    s += Math.min(10, Math.floor(u.length / 80));
+    return s;
+  };
+
+  return cleaned.sort((a, b) => score(b) - score(a))[0];
+}
+
+async function warmUpMediaUrl(session: MonitorSession): Promise<void> {
+  const page = session.page;
+  if (!page) return;
+
+  // If we already have a recent URL, keep it.
+  if (session.lastMediaUrl && session.lastMediaUrlTime) {
+    const age = Date.now() - session.lastMediaUrlTime.getTime();
+    if (age < 5 * 60_000) return;
+  }
+
+  try {
+    // Try to start playback (muted autoplay) so the player actually requests the manifest on headless browsers.
+    await page.evaluate(() => {
+      try {
+        const v = document.querySelector("video") as HTMLVideoElement | null;
+        if (v) {
+          v.muted = true;
+          v.play().catch(() => {});
+        }
+        const selectors = [
+          'button[aria-label*="play" i]',
+          'button[title*="play" i]',
+          'button[class*="play" i]',
+          'div[class*="play" i]',
+        ];
+        for (const sel of selectors) {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          if (el) {
+            el.click();
+            break;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+  } catch {
+    // ignore
+  }
+
+  // Give the page a moment to request manifests.
+  try {
+    await page.waitForTimeout(2500);
+  } catch {
+    // ignore
+  }
+
+  if (session.lastMediaUrl) return;
+
+  // Fallback: scrape the page HTML for any .m3u8 URLs.
+  try {
+    const html = await page.content();
+    const matches = html.match(/https?:\/\/[^"'\\s]+\.m3u8[^"'\\s]*/g) || [];
+    const best = pickBestMediaUrl(matches);
+    if (best) {
+      session.lastMediaUrl = best;
+      session.lastMediaUrlTime = new Date();
+      console.log(`[StreamMonitor] Detected media URL via HTML scan: ${best.slice(0, 180)}...`);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Start monitoring a stream
  */
@@ -150,6 +239,11 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     
     session.page = page;
     session.status = 'running';
+
+    // Best-effort: warm up the media URL early so the first audio capture doesn't fall back to yt-dlp.
+    warmUpMediaUrl(session).catch(err => {
+      console.warn("[StreamMonitor] Media URL warmup failed:", err);
+    });
     
     // Start the comment generation loop
     const intervalMs = config.commentInterval * 1000;
@@ -543,6 +637,11 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
   
   try {
     console.log(`[StreamMonitor] Capturing audio for session ${session.id}`);
+
+    // If we don't have a media URL on Render, try to force the player and/or scrape it.
+    if (!session.lastMediaUrl) {
+      await warmUpMediaUrl(session);
+    }
 
     // Use an active account's cookies + proxy to help yt-dlp avoid 403/blocks.
     const accounts = await getAccountsByUserId(config.userId);
