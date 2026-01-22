@@ -100,22 +100,25 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     page.setDefaultNavigationTimeout(60000);
 
     // Capture HLS/DASH media URLs from the page network so we can avoid yt-dlp (often blocked by CF).
-    page.on('request', req => {
+    // Use multiple events because some environments may not surface all requests on a single hook.
+    const maybeCaptureMediaUrl = (url: string) => {
       try {
-        const url = req.url();
-        if (!url.startsWith('http')) return;
-        // HLS/DASH manifests are the best inputs for ffmpeg capture.
+        if (!url || !url.startsWith("http")) return;
         const isManifest =
-          url.includes('.m3u8') ||
-          url.includes('.mpd') ||
-          url.includes('manifest') ||
-          url.includes('hls');
+          url.includes(".m3u8") ||
+          url.includes(".mpd") ||
+          url.includes("chunklist") ||
+          url.includes("playlist.m3u8") ||
+          url.includes("manifest") ||
+          url.includes("live-hls") ||
+          url.includes("hls");
         if (!isManifest) return;
-        // Prefer m3u8; otherwise keep latest seen.
         const shouldReplace =
           !session.lastMediaUrl ||
-          (url.includes('.m3u8') && !session.lastMediaUrl.includes('.m3u8')) ||
-          (session.lastMediaUrlTime ? Date.now() - session.lastMediaUrlTime.getTime() > 60_000 : true);
+          (url.includes(".m3u8") && !session.lastMediaUrl.includes(".m3u8")) ||
+          (session.lastMediaUrlTime
+            ? Date.now() - session.lastMediaUrlTime.getTime() > 60_000
+            : true);
         if (!shouldReplace) return;
         session.lastMediaUrl = url;
         session.lastMediaUrlTime = new Date();
@@ -123,7 +126,11 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
       } catch {
         // ignore
       }
-    });
+    };
+
+    page.on("request", req => maybeCaptureMediaUrl(req.url()));
+    page.on("requestfinished", req => maybeCaptureMediaUrl(req.url()));
+    page.on("response", res => maybeCaptureMediaUrl(res.url()));
     
     // Navigate to stream
     console.log(`[StreamMonitor] Navigating to ${config.streamUrl}`);

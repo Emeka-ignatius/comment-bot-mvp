@@ -203,16 +203,22 @@ async function writeNetscapeCookiesFile(opts: {
   filePath: string;
   domains?: string[];
 }): Promise<void> {
-  const domains = opts.domains?.length ? opts.domains : [".rumble.com", "rumble.com"];
+  const domains = opts.domains?.length ? opts.domains : [".rumble.com"];
   const cookies = parseCookieString(opts.cookieString);
 
   const header = "# Netscape HTTP Cookie File\n";
   const lines: string[] = [header.trimEnd()];
   for (const domain of domains) {
+    const d = domain.trim();
+    if (!d) continue;
+    // Netscape format expects:
+    // - includeSubdomains TRUE only when domain starts with a leading dot.
+    // - otherwise includeSubdomains should be FALSE.
+    const includeSubdomains = d.startsWith(".") ? "TRUE" : "FALSE";
     for (const c of cookies) {
       // domain, includeSubdomains, path, secure, expires, name, value
       // Expires "0" means session cookie.
-      lines.push([domain, "TRUE", "/", "FALSE", "0", c.name, c.value].join("\t"));
+      lines.push([d, includeSubdomains, "/", "FALSE", "0", c.name, c.value].join("\t"));
     }
   }
   lines.push(""); // trailing newline
