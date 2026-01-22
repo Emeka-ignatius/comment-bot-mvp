@@ -22,13 +22,42 @@ const resolveBinaryPath = async (
     const mod: any = await import(packageName);
     const resolved = mod?.default ?? mod;
     if (typeof resolved === 'string' && resolved.length > 0) {
-      return { name: packageName, path: resolved };
+      // Some packages (notably ffmpeg-static on Windows with certain pnpm settings)
+      // can resolve to a path that doesn't actually exist. Verify before using.
+      if (existsSync(resolved)) {
+        return { name: packageName, path: resolved };
+      }
     }
   } catch {
     // ignore
   }
   return { name: fallbackCommand, path: fallbackCommand };
 };
+
+async function resolveFfmpegBinary(): Promise<ResolvedBinary> {
+  // 1) Prefer @ffmpeg-installer/ffmpeg (reliable on Windows, Linux, macOS)
+  try {
+    const mod: any = await import("@ffmpeg-installer/ffmpeg");
+    const p = mod?.path ?? mod?.default?.path;
+    if (typeof p === "string" && p.length > 0 && existsSync(p)) {
+      return { name: "@ffmpeg-installer/ffmpeg", path: p };
+    }
+  } catch {
+    // ignore
+  }
+  // 2) Then try ffmpeg-static
+  try {
+    const mod: any = await import("ffmpeg-static");
+    const p = mod?.default ?? mod;
+    if (typeof p === "string" && p.length > 0 && existsSync(p)) {
+      return { name: "ffmpeg-static", path: p };
+    }
+  } catch {
+    // ignore
+  }
+  // 3) Fallback to system ffmpeg
+  return { name: "ffmpeg", path: "ffmpeg" };
+}
 
 const execFile = async (
   file: string,
@@ -352,9 +381,8 @@ async function runFfmpegCapture(opts: {
   mediaUrl: string;
   duration: number;
   tmpDir: string;
-  proxyUrl?: string;
 }): Promise<{ audioPath: string }> {
-  const ffmpeg = await resolveBinaryPath('ffmpeg-static', 'ffmpeg');
+  const ffmpeg = await resolveFfmpegBinary();
   const filename = `audio_${Date.now()}.wav`;
   const audioPath = path.join(opts.tmpDir, filename);
 
@@ -364,12 +392,6 @@ async function runFfmpegCapture(opts: {
     'error',
     '-y',
   ];
-
-  // If a proxy is provided, try to apply it for HTTP inputs.
-  // (Works for many ffmpeg builds; if unsupported it will error and we’ll fall back.)
-  if (opts.proxyUrl) {
-    ffmpegArgs.push('-http_proxy', opts.proxyUrl);
-  }
 
   ffmpegArgs.push(
     '-i',
@@ -387,7 +409,7 @@ async function runFfmpegCapture(opts: {
   );
 
   console.log(
-    `[AudioCapture] Running ffmpeg (${ffmpeg.name}) for ${opts.duration}s${opts.proxyUrl ? ` (proxy ${safeProxyLabel(opts.proxyUrl)})` : ''}`
+    `[AudioCapture] Running ffmpeg (${ffmpeg.name}) for ${opts.duration}s`
   );
   await execFile(ffmpeg.path, ffmpegArgs, { timeoutMs: (opts.duration + 45) * 1000 });
 
@@ -458,7 +480,6 @@ export async function captureStreamAudio(config: AudioCaptureConfig): Promise<Au
       mediaUrl,
       duration,
       tmpDir,
-      proxyUrl,
     });
 
     const audioBuffer = await readFile(audioPath);

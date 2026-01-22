@@ -566,9 +566,11 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
 
       // Try to capture audio using ffmpeg approach
       // Construct config in a way that avoids excess-property TS diagnostics in some environments.
+      // Capture a shorter clip than the interval to reduce memory/CPU (especially on Render).
+      const captureDuration = Math.min(config.audioInterval, 12);
       const captureCfg: any = {
         page: session.page,
-        duration: config.audioInterval,
+        duration: captureDuration,
         streamUrl: config.streamUrl,
         cookieString,
         proxyUrl,

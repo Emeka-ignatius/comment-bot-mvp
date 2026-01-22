@@ -224,6 +224,18 @@ const assertApiKey = () => {
   }
 };
 
+const shouldUseMaxCompletionTokens = (model: string): boolean => {
+  const m = (model || "").toLowerCase().trim();
+  // Some newer OpenAI models reject `max_tokens` and require `max_completion_tokens`.
+  // Keep this conservative and key off known families.
+  return (
+    m.startsWith("gpt-5") ||
+    m.startsWith("o1") ||
+    m.startsWith("o3") ||
+    m.startsWith("o4")
+  );
+};
+
 const normalizeResponseFormat = ({
   responseFormat,
   response_format,
@@ -305,7 +317,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   // Honor requested max tokens (default to a reasonable value)
   const resolvedMaxTokens = maxTokens ?? max_tokens ?? 600;
-  payload.max_tokens = resolvedMaxTokens;
+  if (shouldUseMaxCompletionTokens(ENV.openaiModel)) {
+    payload.max_completion_tokens = resolvedMaxTokens;
+  } else {
+    payload.max_tokens = resolvedMaxTokens;
+  }
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
