@@ -11,6 +11,7 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdir, readFile, rm, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import axios from "axios";
 
 type ResolvedBinary = { name: string; path: string };
 
@@ -383,6 +384,92 @@ function safeProxyLabel(proxyUrl?: string): string | undefined {
   }
 }
 
+function pickBestM3u8Url(urls: string[]): string | undefined {
+  const cleaned = urls
+    .map(u => u.trim())
+    .filter(Boolean)
+    .filter(u => u.startsWith("http"))
+    .filter(u => u.includes(".m3u8"));
+  if (cleaned.length === 0) return undefined;
+
+  const score = (u: string) => {
+    let s = 0;
+    if (u.includes("chunklist")) s += 20;
+    if (u.includes("playlist.m3u8")) s += 15;
+    if (u.includes("live-hls")) s += 10;
+    if (u.includes("dvr")) s += 5;
+    if (!u.includes("rumble.com/")) s += 3;
+    s += Math.min(10, Math.floor(u.length / 80));
+    return s;
+  };
+
+  return cleaned.sort((a, b) => score(b) - score(a))[0];
+}
+
+async function tryResolveRumbleM3u8ViaEmbedEndpoints(opts: {
+  streamUrl: string;
+  cookieString?: string;
+  proxyUrl?: string;
+}): Promise<string | null> {
+  // This mirrors our chatId extraction trick: oEmbed -> embed page -> embedJS request=video.
+  // On Render, this is often accessible even when the main video page is CF-blocked.
+  try {
+    const { streamUrl, cookieString, proxyUrl } = opts;
+    const oembedUrl = `https://rumble.com/api/Media/oembed.json?url=${encodeURIComponent(streamUrl)}`;
+    const oembed = await axios.get(oembedUrl, { timeout: 15000, validateStatus: () => true });
+    if (oembed.status !== 200) return null;
+    const oembedData = typeof oembed.data === "string" ? JSON.parse(oembed.data) : oembed.data;
+    const iframeHtml = String(oembedData?.html ?? "");
+    const embedIdMatch = iframeHtml.match(/rumble\.com\/embed\/(v[a-z0-9]+)\//i);
+    const embedId = embedIdMatch?.[1] ?? null;
+    if (!embedId) return null;
+
+    const embedPageUrl = `https://rumble.com/embed/${embedId}/`;
+    const embedPage = await axios.get(embedPageUrl, { timeout: 15000, validateStatus: () => true });
+    if (embedPage.status !== 200 || typeof embedPage.data !== "string") return null;
+    const embedHtml = embedPage.data;
+    const embedJsMatch = embedHtml.match(/\/embedJS\/u[a-z0-9]+/i);
+    const embedJsPath = embedJsMatch?.[0] ?? "/embedJS/u4";
+
+    const embedVideoUrl = `https://rumble.com${embedJsPath}/?request=video&v=${encodeURIComponent(embedId)}`;
+
+    const headers: Record<string, string> = {
+      "User-Agent":
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "application/json,text/plain,*/*",
+      Referer: embedPageUrl,
+      Origin: "https://rumble.com",
+    };
+    if (cookieString) headers["Cookie"] = cookieString;
+
+    let httpsAgent: any;
+    if (proxyUrl) {
+      try {
+        const { HttpsProxyAgent } = await import("https-proxy-agent");
+        httpsAgent = new HttpsProxyAgent(proxyUrl);
+      } catch {
+        // ignore
+      }
+    }
+
+    const embedVideo = await axios.get(embedVideoUrl, {
+      headers,
+      httpsAgent,
+      proxy: false,
+      timeout: 15000,
+      validateStatus: () => true,
+    });
+    if (embedVideo.status !== 200) return null;
+
+    const text = typeof embedVideo.data === "string" ? embedVideo.data : JSON.stringify(embedVideo.data);
+    const matches = text.match(/https?:\/\/[^"'\\s]+\.m3u8[^"'\\s]*/g) || [];
+    const best = pickBestM3u8Url(matches);
+    return best ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function runFfmpegCapture(opts: {
   mediaUrl: string;
   duration: number;
@@ -441,6 +528,19 @@ export async function captureStreamAudio(config: AudioCaptureConfig): Promise<Au
     }
 
     let mediaUrl = mediaUrlOverride;
+
+    // If we don't have a media URL from the browser and it's Rumble, try embed endpoints first (bypasses CF better than yt-dlp).
+    if (!mediaUrl && /rumble\.com/i.test(streamUrl)) {
+      const embedM3u8 = await tryResolveRumbleM3u8ViaEmbedEndpoints({
+        streamUrl,
+        cookieString,
+        proxyUrl,
+      });
+      if (embedM3u8) {
+        mediaUrl = embedM3u8;
+        console.log(`[AudioCapture] Resolved media URL via embedJS: ${mediaUrl.slice(0, 160)}...`);
+      }
+    }
 
     // If we don't have a media URL from the browser, resolve it using yt-dlp (can be blocked by CF).
     if (!mediaUrl) {
