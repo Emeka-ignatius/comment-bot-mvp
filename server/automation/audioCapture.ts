@@ -406,6 +406,68 @@ function pickBestM3u8Url(urls: string[]): string | undefined {
   return cleaned.sort((a, b) => score(b) - score(a))[0];
 }
 
+function normalizeM3u8Candidate(raw: string): string | null {
+  let s = (raw || "").trim();
+  if (!s) return null;
+  // De-escape common JSON escaping.
+  s = s.replace(/\\\//g, "/").replace(/https:\\\/\\\//g, "https://").replace(/http:\\\/\\\//g, "http://");
+  if (s.startsWith("//")) s = `https:${s}`;
+  if (s.startsWith("/")) s = `https://rumble.com${s}`;
+  if (!s.startsWith("http")) return null;
+  if (!s.includes(".m3u8")) return null;
+  return s;
+}
+
+function extractM3u8FromText(text: string): string | null {
+  if (!text) return null;
+  const t = text;
+  // Match http(s) and also escaped https:\/\/ variants.
+  const rawMatches =
+    t.match(/https?:\/\/[^"'\\s]+\.m3u8[^"'\\s]*/g) ||
+    t.match(/https?:\\\/\\\/[^"'\\s]+\.m3u8[^"'\\s]*/g) ||
+    t.match(/\\\/live-[^"'\\s]+\.m3u8[^"'\\s]*/g) ||
+    [];
+  const candidates = rawMatches
+    .map(m => normalizeM3u8Candidate(m))
+    .filter((x): x is string => Boolean(x));
+  return pickBestM3u8Url(candidates) ?? null;
+}
+
+async function verifyM3u8Url(url: string, opts: { cookieString?: string; proxyUrl?: string }): Promise<boolean> {
+  try {
+    let httpsAgent: any;
+    if (opts.proxyUrl) {
+      try {
+        const { HttpsProxyAgent } = await import("https-proxy-agent");
+        httpsAgent = new HttpsProxyAgent(opts.proxyUrl);
+      } catch {
+        // ignore
+      }
+    }
+    const headers: Record<string, string> = {
+      "User-Agent":
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      Accept: "*/*",
+      Referer: "https://rumble.com/",
+    };
+    if (opts.cookieString) headers["Cookie"] = opts.cookieString;
+    const res = await axios.get(url, {
+      headers,
+      httpsAgent,
+      proxy: false,
+      timeout: 12000,
+      responseType: "text",
+      validateStatus: () => true,
+      maxRedirects: 5,
+    });
+    if (res.status !== 200) return false;
+    const body = typeof res.data === "string" ? res.data : "";
+    return body.includes("#EXTM3U");
+  } catch {
+    return false;
+  }
+}
+
 async function tryResolveRumbleM3u8ViaEmbedEndpoints(opts: {
   streamUrl: string;
   cookieString?: string;
@@ -461,10 +523,29 @@ async function tryResolveRumbleM3u8ViaEmbedEndpoints(opts: {
     });
     if (embedVideo.status !== 200) return null;
 
-    const text = typeof embedVideo.data === "string" ? embedVideo.data : JSON.stringify(embedVideo.data);
-    const matches = text.match(/https?:\/\/[^"'\\s]+\.m3u8[^"'\\s]*/g) || [];
-    const best = pickBestM3u8Url(matches);
-    return best ?? null;
+    const rawText =
+      typeof embedVideo.data === "string"
+        ? embedVideo.data
+        : JSON.stringify(embedVideo.data);
+
+    const found = extractM3u8FromText(rawText);
+    if (found) return found;
+
+    // Fallback: many live streams use a predictable path based on the embed id (without leading "v").
+    const idNoV = embedId.startsWith("v") ? embedId.slice(1) : embedId;
+    const candidates = [
+      `https://rumble.com/live-hls-dvr/${idNoV}/playlist.m3u8?level=1`,
+      `https://rumble.com/live-hls-dvr/${idNoV}/playlist.m3u8`,
+      `https://rumble.com/live-hls/${idNoV}/playlist.m3u8?level=1`,
+      `https://rumble.com/live-hls/${idNoV}/playlist.m3u8`,
+    ];
+    for (const c of candidates) {
+      if (await verifyM3u8Url(c, { cookieString, proxyUrl })) {
+        return c;
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }
