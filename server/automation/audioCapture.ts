@@ -35,29 +35,55 @@ const resolveBinaryPath = async (
   return { name: fallbackCommand, path: fallbackCommand };
 };
 
-async function resolveFfmpegBinary(): Promise<ResolvedBinary> {
-  // 1) Prefer @ffmpeg-installer/ffmpeg (reliable on Windows, Linux, macOS)
-  try {
-    const mod: any = await import("@ffmpeg-installer/ffmpeg");
-    const p = mod?.path ?? mod?.default?.path;
-    if (typeof p === "string" && p.length > 0 && existsSync(p)) {
-      return { name: "@ffmpeg-installer/ffmpeg", path: p };
+async function resolveFfmpegBinaries(): Promise<ResolvedBinary[]> {
+  const candidates: ResolvedBinary[] = [];
+
+  // On Linux, ffmpeg-static tends to be the most compatible for server environments.
+  // On Windows, @ffmpeg-installer/ffmpeg tends to be most reliable.
+  const preferStaticFirst = os.platform() !== "win32";
+
+  const tryFfmpegStatic = async () => {
+    try {
+      const mod: any = await import("ffmpeg-static");
+      const p = mod?.default ?? mod;
+      if (typeof p === "string" && p.length > 0 && existsSync(p)) {
+        candidates.push({ name: "ffmpeg-static", path: p });
+      }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
-  }
-  // 2) Then try ffmpeg-static
-  try {
-    const mod: any = await import("ffmpeg-static");
-    const p = mod?.default ?? mod;
-    if (typeof p === "string" && p.length > 0 && existsSync(p)) {
-      return { name: "ffmpeg-static", path: p };
+  };
+
+  const tryFfmpegInstaller = async () => {
+    try {
+      const mod: any = await import("@ffmpeg-installer/ffmpeg");
+      const p = mod?.path ?? mod?.default?.path;
+      if (typeof p === "string" && p.length > 0 && existsSync(p)) {
+        candidates.push({ name: "@ffmpeg-installer/ffmpeg", path: p });
+      }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
+  };
+
+  if (preferStaticFirst) {
+    await tryFfmpegStatic();
+    await tryFfmpegInstaller();
+  } else {
+    await tryFfmpegInstaller();
+    await tryFfmpegStatic();
   }
-  // 3) Fallback to system ffmpeg
-  return { name: "ffmpeg", path: "ffmpeg" };
+
+  // Always include system ffmpeg as last resort.
+  candidates.push({ name: "ffmpeg", path: "ffmpeg" });
+
+  // De-dupe by path.
+  const seen = new Set<string>();
+  return candidates.filter(c => {
+    if (seen.has(c.path)) return false;
+    seen.add(c.path);
+    return true;
+  });
 }
 
 const execFile = async (
@@ -560,57 +586,87 @@ async function runFfmpegCapture(opts: {
   cookieString?: string;
   proxyUrl?: string;
 }): Promise<{ audioPath: string }> {
-  const ffmpeg = await resolveFfmpegBinary();
-  const filename = `audio_${Date.now()}.wav`;
-  const audioPath = path.join(opts.tmpDir, filename);
+  const ffmpegs = await resolveFfmpegBinaries();
+  let lastErr: unknown = null;
 
-  const ffmpegArgs: string[] = [
-    '-hide_banner',
-    '-loglevel',
-    'error',
-    '-y',
-  ];
+  for (const ffmpeg of ffmpegs) {
+    const filename = `audio_${Date.now()}.wav`;
+    const audioPath = path.join(opts.tmpDir, filename);
 
-  // For HLS/HTTP, Rumble often requires browser-like headers.
-  if (opts.userAgent) {
-    ffmpegArgs.push('-user_agent', opts.userAgent);
+    const ffmpegArgs: string[] = [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+    ];
+
+    // For HLS/HTTP, Rumble often requires browser-like headers.
+    if (opts.userAgent) {
+      ffmpegArgs.push("-user_agent", opts.userAgent);
+    }
+    const headers: string[] = [];
+    if (opts.referer) headers.push(`Referer: ${opts.referer}`);
+    // Start conservative: avoid huge cookie headers unless needed.
+    // (Some ffmpeg builds can behave badly with long headers.)
+    if (opts.cookieString && opts.mediaUrl.includes("rumble.com/")) {
+      headers.push(`Cookie: ${opts.cookieString}`);
+    }
+    if (headers.length > 0) {
+      // ffmpeg expects CRLF-separated headers and a trailing CRLF.
+      ffmpegArgs.push("-headers", `${headers.join("\r\n")}\r\n`);
+    }
+    // Best-effort: proxy for HTTP fetches (works on many ffmpeg builds).
+    if (opts.proxyUrl) {
+      ffmpegArgs.push("-http_proxy", opts.proxyUrl);
+    }
+
+    ffmpegArgs.push(
+      "-i",
+      opts.mediaUrl,
+      "-t",
+      String(opts.duration),
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
+      "-f",
+      "wav",
+      audioPath
+    );
+
+    console.log(
+      `[AudioCapture] Running ffmpeg (${ffmpeg.name}) for ${opts.duration}s`
+    );
+
+    try {
+      await execFile(ffmpeg.path, ffmpegArgs, {
+        timeoutMs: (opts.duration + 45) * 1000,
+      });
+
+      if (!existsSync(audioPath)) {
+        throw new Error("ffmpeg finished but no audio file was created");
+      }
+
+      return { audioPath };
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `[AudioCapture] ffmpeg (${ffmpeg.name}) failed, trying next if available: ${formatUnknownError(err)}`
+      );
+      // best effort cleanup of failed output
+      try {
+        if (existsSync(audioPath)) {
+          await rm(audioPath, { force: true });
+        }
+      } catch {
+        // ignore
+      }
+      continue;
+    }
   }
-  const headers: string[] = [];
-  if (opts.referer) headers.push(`Referer: ${opts.referer}`);
-  if (opts.cookieString) headers.push(`Cookie: ${opts.cookieString}`);
-  if (headers.length > 0) {
-    // ffmpeg expects CRLF-separated headers and a trailing CRLF.
-    ffmpegArgs.push('-headers', `${headers.join('\r\n')}\r\n`);
-  }
-  // Best-effort: proxy for HTTP fetches (works on many ffmpeg builds).
-  if (opts.proxyUrl) {
-    ffmpegArgs.push('-http_proxy', opts.proxyUrl);
-  }
 
-  ffmpegArgs.push(
-    '-i',
-    opts.mediaUrl,
-    '-t',
-    String(opts.duration),
-    '-vn',
-    '-ac',
-    '1',
-    '-ar',
-    '16000',
-    '-f',
-    'wav',
-    audioPath
-  );
-
-  console.log(
-    `[AudioCapture] Running ffmpeg (${ffmpeg.name}) for ${opts.duration}s`
-  );
-  await execFile(ffmpeg.path, ffmpegArgs, { timeoutMs: (opts.duration + 45) * 1000 });
-
-  if (!existsSync(audioPath)) {
-    throw new Error('ffmpeg finished but no audio file was created');
-  }
-  return { audioPath };
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 /**
