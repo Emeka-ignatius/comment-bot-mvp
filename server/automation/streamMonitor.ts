@@ -117,6 +117,23 @@ async function warmUpMediaUrl(session: MonitorSession): Promise<void> {
             break;
           }
         }
+
+        // Common consent/age gates: best-effort click.
+        const gateSelectors = [
+          'button:has-text("I Agree")',
+          'button:has-text("Accept")',
+          'button:has-text("Continue")',
+          'button[aria-label*="accept" i]',
+          'button[aria-label*="continue" i]',
+        ];
+        // NOTE: :has-text is not supported in querySelector; keep only simple ones.
+        for (const sel of gateSelectors.filter(s => !s.includes(":has-text"))) {
+          const el = document.querySelector(sel) as HTMLElement | null;
+          if (el) {
+            el.click();
+            break;
+          }
+        }
       } catch {
         // ignore
       }
@@ -133,6 +150,69 @@ async function warmUpMediaUrl(session: MonitorSession): Promise<void> {
   }
 
   if (session.lastMediaUrl) return;
+
+  // Fallback: ask the browser for resource URLs it has already fetched.
+  try {
+    const perfUrls = await page.evaluate(() => {
+      try {
+        // Some browsers restrict Performance entries; best-effort.
+        const entries = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
+        return entries.map(e => (e as any).name).filter(Boolean) as string[];
+      } catch {
+        return [] as string[];
+      }
+    });
+    const bestPerf = pickBestMediaUrl(perfUrls);
+    if (bestPerf) {
+      session.lastMediaUrl = bestPerf;
+      session.lastMediaUrlTime = new Date();
+      console.log(`[StreamMonitor] Detected media URL via performance entries: ${bestPerf.slice(0, 180)}...`);
+      return;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Fallback: scrape common Rumble player globals for playlist URLs.
+  try {
+    const globalUrls = await page.evaluate(() => {
+      const out: string[] = [];
+      const pushAny = (v: any) => {
+        if (!v) return;
+        if (typeof v === "string") {
+          if (v.includes(".m3u8") || v.includes("chunklist")) out.push(v);
+          return;
+        }
+        if (Array.isArray(v)) {
+          for (const x of v) pushAny(x);
+          return;
+        }
+        if (typeof v === "object") {
+          for (const k of Object.keys(v)) pushAny((v as any)[k]);
+        }
+      };
+      try {
+        // @ts-ignore
+        pushAny((window as any).Rumble);
+        // @ts-ignore
+        pushAny((window as any).__INITIAL_STATE__);
+        // @ts-ignore
+        pushAny((window as any).__NEXT_DATA__);
+      } catch {
+        // ignore
+      }
+      return out;
+    });
+    const bestGlobal = pickBestMediaUrl(globalUrls);
+    if (bestGlobal) {
+      session.lastMediaUrl = bestGlobal;
+      session.lastMediaUrlTime = new Date();
+      console.log(`[StreamMonitor] Detected media URL via page globals: ${bestGlobal.slice(0, 180)}...`);
+      return;
+    }
+  } catch {
+    // ignore
+  }
 
   // Fallback: scrape the page HTML for any .m3u8 URLs.
   try {
