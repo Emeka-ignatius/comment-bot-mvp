@@ -1,0 +1,16 @@
+node_modules
+dist
+client/node_modules
+client/dist
+.git
+.github
+.cursor
+.DS_Store
+*.log
+*.sqlite
+*.db
+coverage
+tmp
+npm-debug.log*
+pnpm-debug.log*
+

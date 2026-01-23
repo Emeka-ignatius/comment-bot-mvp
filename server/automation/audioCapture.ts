@@ -38,6 +38,18 @@ const resolveBinaryPath = async (
 async function resolveFfmpegBinaries(): Promise<ResolvedBinary[]> {
   const candidates: ResolvedBinary[] = [];
 
+  // If explicitly provided, always try that first.
+  const envPath = process.env.FFMPEG_PATH;
+  if (envPath && typeof envPath === "string" && envPath.length > 0) {
+    try {
+      if (existsSync(envPath)) {
+        candidates.push({ name: "FFMPEG_PATH", path: envPath });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // On Linux, ffmpeg-static tends to be the most compatible for server environments.
   // On Windows, @ffmpeg-installer/ffmpeg tends to be most reliable.
   const preferStaticFirst = os.platform() !== "win32";
@@ -494,6 +506,75 @@ async function verifyM3u8Url(url: string, opts: { cookieString?: string; proxyUr
   }
 }
 
+async function fetchText(url: string, opts: { cookieString?: string; proxyUrl?: string; referer?: string; userAgent?: string }): Promise<{ status: number; text: string }> {
+  let httpsAgent: any;
+  if (opts.proxyUrl) {
+    try {
+      const { HttpsProxyAgent } = await import("https-proxy-agent");
+      httpsAgent = new HttpsProxyAgent(opts.proxyUrl);
+    } catch {
+      // ignore
+    }
+  }
+  const headers: Record<string, string> = {
+    "User-Agent":
+      opts.userAgent ??
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    Accept: "*/*",
+    Referer: opts.referer ?? "https://rumble.com/",
+  };
+  if (opts.cookieString) headers["Cookie"] = opts.cookieString;
+  const res = await axios.get(url, {
+    headers,
+    httpsAgent,
+    proxy: false,
+    timeout: 15000,
+    responseType: "text",
+    validateStatus: () => true,
+    maxRedirects: 5,
+  });
+  return { status: res.status, text: typeof res.data === "string" ? res.data : "" };
+}
+
+function resolveM3u8Ref(baseUrl: string, ref: string): string | null {
+  const r = ref.trim();
+  if (!r || r.startsWith("#")) return null;
+  if (r.startsWith("http://") || r.startsWith("https://")) return r;
+  if (r.startsWith("//")) return `https:${r}`;
+  try {
+    return new URL(r, baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+async function resolveBestHlsUrl(
+  mediaUrl: string,
+  opts: { cookieString?: string; proxyUrl?: string; referer?: string; userAgent?: string }
+): Promise<string> {
+  // If this is a master playlist (variants), prefer the first chunklist/variant entry.
+  // This often yields a CDN URL like https://1a-1791.com/.../chunklist_DVR.m3u8 which is easier for ffmpeg to ingest.
+  if (!mediaUrl.includes(".m3u8")) return mediaUrl;
+
+  const { status, text } = await fetchText(mediaUrl, opts);
+  if (status !== 200 || !text.includes("#EXTM3U")) {
+    return mediaUrl;
+  }
+
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const refs: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("#")) continue;
+    const abs = resolveM3u8Ref(mediaUrl, line);
+    if (abs && abs.includes(".m3u8")) refs.push(abs);
+  }
+  // If it already looks like a chunklist, keep it.
+  if (mediaUrl.includes("chunklist")) return mediaUrl;
+
+  const best = pickBestM3u8Url(refs) ?? refs[0];
+  return best ?? mediaUrl;
+}
+
 async function tryResolveRumbleM3u8ViaEmbedEndpoints(opts: {
   streamUrl: string;
   cookieString?: string;
@@ -586,6 +667,22 @@ async function runFfmpegCapture(opts: {
   cookieString?: string;
   proxyUrl?: string;
 }): Promise<{ audioPath: string }> {
+  // Resolve a more "ffmpeg-friendly" URL if we're given a master playlist.
+  let inputUrl = opts.mediaUrl;
+  try {
+    inputUrl = await resolveBestHlsUrl(opts.mediaUrl, {
+      cookieString: opts.cookieString,
+      proxyUrl: opts.proxyUrl,
+      referer: opts.referer,
+      userAgent: opts.userAgent,
+    });
+    if (inputUrl !== opts.mediaUrl) {
+      console.log(`[AudioCapture] Using derived HLS URL: ${inputUrl.slice(0, 180)}...`);
+    }
+  } catch {
+    // ignore; use original
+  }
+
   const ffmpegs = await resolveFfmpegBinaries();
   let lastErr: unknown = null;
 
@@ -608,7 +705,7 @@ async function runFfmpegCapture(opts: {
     if (opts.referer) headers.push(`Referer: ${opts.referer}`);
     // Start conservative: avoid huge cookie headers unless needed.
     // (Some ffmpeg builds can behave badly with long headers.)
-    if (opts.cookieString && opts.mediaUrl.includes("rumble.com/")) {
+    if (opts.cookieString && inputUrl.includes("rumble.com/")) {
       headers.push(`Cookie: ${opts.cookieString}`);
     }
     if (headers.length > 0) {
@@ -622,7 +719,7 @@ async function runFfmpegCapture(opts: {
 
     ffmpegArgs.push(
       "-i",
-      opts.mediaUrl,
+      inputUrl,
       "-t",
       String(opts.duration),
       "-vn",
