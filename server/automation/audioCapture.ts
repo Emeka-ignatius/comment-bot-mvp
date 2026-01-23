@@ -89,12 +89,12 @@ const execFile = async (
       if (timeout) clearTimeout(timeout);
       reject(err);
     });
-    child.on('close', code => {
+    child.on('close', (code, signal) => {
       if (timeout) clearTimeout(timeout);
       if (code === 0) return resolve({ stdout, stderr });
       reject(
         new Error(
-          `Process failed (exit ${code}): ${file}\n${stderr || stdout || ''}`.trim()
+          `Process failed (exit ${code}${signal ? `, signal ${signal}` : ''}): ${file}\n${stderr || stdout || ''}`.trim()
         )
       );
     });
@@ -555,6 +555,10 @@ async function runFfmpegCapture(opts: {
   mediaUrl: string;
   duration: number;
   tmpDir: string;
+  referer?: string;
+  userAgent?: string;
+  cookieString?: string;
+  proxyUrl?: string;
 }): Promise<{ audioPath: string }> {
   const ffmpeg = await resolveFfmpegBinary();
   const filename = `audio_${Date.now()}.wav`;
@@ -566,6 +570,22 @@ async function runFfmpegCapture(opts: {
     'error',
     '-y',
   ];
+
+  // For HLS/HTTP, Rumble often requires browser-like headers.
+  if (opts.userAgent) {
+    ffmpegArgs.push('-user_agent', opts.userAgent);
+  }
+  const headers: string[] = [];
+  if (opts.referer) headers.push(`Referer: ${opts.referer}`);
+  if (opts.cookieString) headers.push(`Cookie: ${opts.cookieString}`);
+  if (headers.length > 0) {
+    // ffmpeg expects CRLF-separated headers and a trailing CRLF.
+    ffmpegArgs.push('-headers', `${headers.join('\r\n')}\r\n`);
+  }
+  // Best-effort: proxy for HTTP fetches (works on many ffmpeg builds).
+  if (opts.proxyUrl) {
+    ffmpegArgs.push('-http_proxy', opts.proxyUrl);
+  }
 
   ffmpegArgs.push(
     '-i',
@@ -667,6 +687,10 @@ export async function captureStreamAudio(config: AudioCaptureConfig): Promise<Au
       mediaUrl,
       duration,
       tmpDir,
+      referer: streamUrl,
+      userAgent,
+      cookieString,
+      proxyUrl,
     });
 
     const audioBuffer = await readFile(audioPath);
