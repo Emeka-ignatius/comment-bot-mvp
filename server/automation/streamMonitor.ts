@@ -65,7 +65,12 @@ function pickBestMediaUrl(urls: string[]): string | undefined {
     .map(u => u.trim())
     .filter(Boolean)
     .filter(u => u.startsWith("http"))
-    .filter(u => !u.includes("hls.js"));
+    .filter(u => !u.includes("hls.js"))
+    .filter(u => !u.includes("challenges.cloudflare.com"))
+    .filter(u => !u.includes("turnstile"))
+    .filter(u => !u.endsWith(".js"))
+    // Only accept real manifests/chunklists (avoid generic "hls" matches and scripts).
+    .filter(u => u.includes(".m3u8") || u.includes(".mpd") || u.includes("chunklist"));
   if (cleaned.length === 0) return undefined;
 
   const score = (u: string) => {
@@ -273,14 +278,14 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     const maybeCaptureMediaUrl = (url: string) => {
       try {
         if (!url || !url.startsWith("http")) return;
+        // Never treat Cloudflare assets as media.
+        if (url.includes("challenges.cloudflare.com") || url.includes("turnstile")) return;
+        if (url.endsWith(".js")) return;
         const isManifest =
           url.includes(".m3u8") ||
           url.includes(".mpd") ||
           url.includes("chunklist") ||
-          url.includes("playlist.m3u8") ||
-          url.includes("manifest") ||
-          url.includes("live-hls") ||
-          url.includes("hls");
+          url.includes("playlist.m3u8");
         if (!isManifest) return;
         const shouldReplace =
           !session.lastMediaUrl ||
