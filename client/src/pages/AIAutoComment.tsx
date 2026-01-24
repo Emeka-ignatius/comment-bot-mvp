@@ -73,6 +73,15 @@ export default function AIAutoComment() {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  // Same stop endpoint, but without per-session toast (useful for "Stop all").
+  const stopMonitorSilent = trpc.aiComment.stopMonitor.useMutation({
+    onSuccess: () => {
+      refetchSessions();
+    },
+  });
+
+  const [stopAllPending, setStopAllPending] = useState(false);
   
   const pauseMonitor = trpc.aiComment.pauseMonitor.useMutation({
     onSuccess: () => {
@@ -166,6 +175,22 @@ export default function AIAutoComment() {
       audioInterval,
     });
   };
+
+  const handleStopAll = async () => {
+    if (!sessions || sessions.length === 0) return;
+    setStopAllPending(true);
+    try {
+      for (const s of sessions) {
+        await stopMonitorSilent.mutateAsync({ sessionId: s.id });
+      }
+      toast.success('All monitoring stopped');
+      refetchSessions();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to stop all monitoring');
+    } finally {
+      setStopAllPending(false);
+    }
+  };
   
   const styleDescriptions: Record<CommentStyle, string> = {
     engaging: 'Enthusiastic reactions, questions, and genuine interest',
@@ -194,10 +219,23 @@ export default function AIAutoComment() {
       {sessions && sessions.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              Active Monitoring Sessions
-            </CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Active Monitoring Sessions
+              </CardTitle>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleStopAll}
+                disabled={stopAllPending || stopMonitorSilent.isPending}
+                title="Stop all monitoring sessions"
+                className="flex items-center gap-2"
+              >
+                <Square className="h-4 w-4" />
+                Stop all
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {sessions.map((session: MonitorSession) => (
@@ -243,8 +281,11 @@ export default function AIAutoComment() {
                       size="sm"
                       onClick={() => pauseMonitor.mutate({ sessionId: session.id })}
                       disabled={pauseMonitor.isPending}
+                      title="Pause monitoring"
+                      className="flex items-center gap-2"
                     >
                       <Pause className="h-4 w-4" />
+                      Pause
                     </Button>
                   )}
                   {session.status === 'paused' && (
@@ -253,8 +294,11 @@ export default function AIAutoComment() {
                       size="sm"
                       onClick={() => resumeMonitor.mutate({ sessionId: session.id })}
                       disabled={resumeMonitor.isPending}
+                      title="Resume monitoring"
+                      className="flex items-center gap-2"
                     >
                       <Play className="h-4 w-4" />
+                      Resume
                     </Button>
                   )}
                   <Button
@@ -262,8 +306,11 @@ export default function AIAutoComment() {
                     size="sm"
                     onClick={() => stopMonitor.mutate({ sessionId: session.id })}
                     disabled={stopMonitor.isPending}
+                    title="Stop monitoring"
+                    className="flex items-center gap-2"
                   >
                     <Square className="h-4 w-4" />
+                    Stop
                   </Button>
                 </div>
               </div>
