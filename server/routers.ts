@@ -782,7 +782,7 @@ export const appRouter = router({
             "question",
             "agreement",
           ]),
-          commentInterval: z.number().min(30).max(600), // 30 seconds to 10 minutes
+          commentInterval: z.number().min(10).max(600), // 10 seconds to 10 minutes
           includeEmojis: z.boolean(),
           maxCommentLength: z.number().min(10).max(500),
           accountIds: z.array(z.number()),

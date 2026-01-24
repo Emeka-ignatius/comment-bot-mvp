@@ -409,9 +409,9 @@ export default function AIAutoComment() {
               <Slider
                 value={[commentInterval]}
                 onValueChange={([v]) => setCommentInterval(v)}
-                min={30}
+                min={10}
                 max={300}
-                step={15}
+                step={5}
               />
               <p className="text-sm text-muted-foreground">
                 Time between AI-generated comments

@@ -162,8 +162,8 @@ async function executeJob(context: JobExecutionContext) {
     if (!jobData) throw new Error("Job not found");
 
     // Apply rate limiting delay
-    const minDelay = jobData.minDelaySeconds || 30;
-    const maxDelay = jobData.maxDelaySeconds || 60;
+    const minDelay = jobData.minDelaySeconds || 10;
+    const maxDelay = jobData.maxDelaySeconds || 30;
     const randomDelay =
       Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
 

@@ -127,8 +127,8 @@ export const jobs = pgTable("jobs", {
   updatedAt: timestamp("updatedAt", { mode: "date", withTimezone: true })
     .defaultNow()
     .notNull(),
-  minDelaySeconds: integer("minDelaySeconds").default(30),
-  maxDelaySeconds: integer("maxDelaySeconds").default(60),
+  minDelaySeconds: integer("minDelaySeconds").default(10),
+  maxDelaySeconds: integer("maxDelaySeconds").default(30),
 });
 
 export const logs = pgTable("logs", {
