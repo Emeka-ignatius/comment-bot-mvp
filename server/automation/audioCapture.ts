@@ -41,12 +41,10 @@ async function resolveFfmpegBinaries(): Promise<ResolvedBinary[]> {
   // If explicitly provided, always try that first.
   const envPath = process.env.FFMPEG_PATH;
   if (envPath && typeof envPath === "string" && envPath.length > 0) {
-    try {
-      if (existsSync(envPath)) {
-        candidates.push({ name: "FFMPEG_PATH", path: envPath });
-      }
-    } catch {
-      // ignore
+    // Allow values like "ffmpeg" (PATH lookup) or "/usr/bin/ffmpeg" (absolute).
+    candidates.push({ name: "FFMPEG_PATH", path: envPath });
+    if (process.env.FFMPEG_ONLY === "1" || process.env.FFMPEG_ONLY === "true") {
+      return candidates;
     }
   }
 

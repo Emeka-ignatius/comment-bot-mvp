@@ -29,8 +29,9 @@ COPY . .
 # Build (client + server bundle)
 RUN pnpm build
 
-# Prefer system ffmpeg in this container
-ENV FFMPEG_PATH=/usr/bin/ffmpeg
+# Prefer system ffmpeg in this container (skip npm ffmpeg binaries entirely)
+ENV FFMPEG_PATH=ffmpeg
+ENV FFMPEG_ONLY=1
 ENV NODE_ENV=production
 ENV PORT=10000
 
