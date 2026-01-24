@@ -38,6 +38,11 @@ export interface MonitorSession {
   id: string;
   config: StreamMonitorConfig;
   status: 'starting' | 'running' | 'paused' | 'stopped' | 'error';
+  // Startup progress (helps UI show what "starting" is doing).
+  startupStage?: string;
+  startupMessage?: string;
+  startupStartedAtMs?: number;
+  startupUpdatedAtMs?: number;
   browser?: Browser;
   page?: Page;
   intervalId?: NodeJS.Timeout;
@@ -59,6 +64,14 @@ export interface MonitorSession {
 
 // Active monitor sessions
 const activeSessions = new Map<string, MonitorSession>();
+
+function setStartupProgress(session: MonitorSession, stage: string, message: string) {
+  const now = Date.now();
+  if (!session.startupStartedAtMs) session.startupStartedAtMs = now;
+  session.startupStage = stage;
+  session.startupMessage = message;
+  session.startupUpdatedAtMs = now;
+}
 
 function pickBestMediaUrl(urls: string[]): string | undefined {
   const cleaned = urls
@@ -249,125 +262,152 @@ export async function startStreamMonitor(config: StreamMonitorConfig): Promise<s
     currentAccountIndex: 0,
     previousComments: [],
   };
+  setStartupProgress(session, "queued", "Queued (starting browser…)"); 
   
   activeSessions.set(sessionId, session);
-  
-  try {
-    // Launch browser for screenshot capture
-    console.log(`[StreamMonitor] Starting session ${sessionId} for ${config.streamUrl}`);
-    
-    const browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
-    });
-    
-    session.browser = browser;
-    
-    const page = await browser.newPage();
-    await page.setViewportSize({ width: 1280, height: 720 });
-    page.setDefaultTimeout(60000);
-    page.setDefaultNavigationTimeout(60000);
 
-    // Capture HLS/DASH media URLs from the page network so we can avoid yt-dlp (often blocked by CF).
-    // Use multiple events because some environments may not surface all requests on a single hook.
-    const maybeCaptureMediaUrl = (url: string) => {
-      try {
-        if (!url || !url.startsWith("http")) return;
-        // Never treat Cloudflare assets as media.
-        if (url.includes("challenges.cloudflare.com") || url.includes("turnstile")) return;
-        if (url.endsWith(".js")) return;
-        const isManifest =
-          url.includes(".m3u8") ||
-          url.includes(".mpd") ||
-          url.includes("chunklist") ||
-          url.includes("playlist.m3u8");
-        if (!isManifest) return;
-        const shouldReplace =
-          !session.lastMediaUrl ||
-          (url.includes(".m3u8") && !session.lastMediaUrl.includes(".m3u8")) ||
-          (session.lastMediaUrlTime
-            ? Date.now() - session.lastMediaUrlTime.getTime() > 60_000
-            : true);
-        if (!shouldReplace) return;
-        session.lastMediaUrl = url;
-        session.lastMediaUrlTime = new Date();
-        console.log(`[StreamMonitor] Detected media URL: ${url.slice(0, 180)}...`);
-      } catch {
-        // ignore
-      }
-    };
+  // IMPORTANT: Don't block the API request on Playwright.
+  // Init happens asynchronously so "Start Monitoring" returns fast.
+  console.log(`[StreamMonitor] Starting session ${sessionId} for ${config.streamUrl}`);
+  initializeSession(session).catch(err => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[StreamMonitor] Failed to initialize session ${sessionId}:`, err);
+    session.status = "error";
+    session.errors.push(msg);
+    setStartupProgress(session, "error", `Startup failed: ${msg}`);
+    // Best-effort cleanup if partially created.
+    if (session.intervalId) clearInterval(session.intervalId);
+    if (session.audioIntervalId) clearInterval(session.audioIntervalId);
+    if (session.browser) {
+      session.browser.close().catch(() => {});
+    }
+  });
 
-    page.on("request", req => maybeCaptureMediaUrl(req.url()));
-    page.on("requestfinished", req => maybeCaptureMediaUrl(req.url()));
-    page.on("response", res => maybeCaptureMediaUrl(res.url()));
-    
-    // Navigate to stream
-    console.log(`[StreamMonitor] Navigating to ${config.streamUrl}`);
+  return sessionId;
+}
+
+async function initializeSession(session: MonitorSession): Promise<void> {
+  // If session no longer exists, do nothing.
+  // (We keep a second "stopped" check later, after navigation, to handle stop requests during startup.)
+  if (!activeSessions.has(session.id)) return;
+
+  const { config } = session;
+
+  setStartupProgress(session, "launching_browser", "Launching browser…");
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    ],
+  });
+  session.browser = browser;
+
+  setStartupProgress(session, "creating_page", "Creating page…");
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  page.setDefaultTimeout(45_000);
+  page.setDefaultNavigationTimeout(45_000);
+
+  // Capture HLS/DASH media URLs from the page network so we can avoid yt-dlp (often blocked by CF).
+  const maybeCaptureMediaUrl = (url: string) => {
     try {
-      await page.goto(config.streamUrl, { waitUntil: 'networkidle', timeout: 60000 });
-    } catch (navError) {
-      // If networkidle times out, try with domcontentloaded instead
-      console.warn(`[StreamMonitor] Network idle timeout, trying with domcontentloaded`);
-      await page.goto(config.streamUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      if (!url || !url.startsWith("http")) return;
+      // Never treat Cloudflare assets as media.
+      if (url.includes("challenges.cloudflare.com") || url.includes("turnstile")) return;
+      if (url.endsWith(".js")) return;
+      const isManifest =
+        url.includes(".m3u8") ||
+        url.includes(".mpd") ||
+        url.includes("chunklist") ||
+        url.includes("playlist.m3u8");
+      if (!isManifest) return;
+      const shouldReplace =
+        !session.lastMediaUrl ||
+        (url.includes(".m3u8") && !session.lastMediaUrl.includes(".m3u8")) ||
+        (session.lastMediaUrlTime
+          ? Date.now() - session.lastMediaUrlTime.getTime() > 60_000
+          : true);
+      if (!shouldReplace) return;
+      session.lastMediaUrl = url;
+      session.lastMediaUrlTime = new Date();
+      console.log(`[StreamMonitor] Detected media URL: ${url.slice(0, 180)}...`);
+    } catch {
+      // ignore
     }
-    
-    // Check if page loaded successfully
-    const pageTitle = await page.title();
-    if (pageTitle.includes('404') || pageTitle.includes('Not Found')) {
-      throw new Error('Stream not found or has ended. Please add a new live stream URL.');
-    }
-    
-    session.page = page;
-    session.status = 'running';
+  };
 
-    // Best-effort: warm up the media URL early so the first audio capture doesn't fall back to yt-dlp.
-    warmUpMediaUrl(session).catch(err => {
-      console.warn("[StreamMonitor] Media URL warmup failed:", err);
-    });
-    
-    // Start the comment generation loop
-    const intervalMs = config.commentInterval * 1000;
-    session.intervalId = setInterval(() => {
-      generateAndPostComment(session).catch(err => {
-        console.error(`[StreamMonitor] Error in comment loop:`, err);
-        session.errors.push(err.message);
-      });
-    }, intervalMs);
-    
-    // Start audio capture loop if enabled
-    if (config.audioEnabled) {
-      const audioIntervalMs = config.audioInterval * 1000;
-      session.audioIntervalId = setInterval(() => {
-        captureAndTranscribeAudio(session).catch(err => {
-          console.error(`[StreamMonitor] Error in audio capture:`, err);
-          // Don't add to errors array - audio is optional
-        });
-      }, audioIntervalMs);
-      console.log(`[StreamMonitor] Audio capture started (every ${config.audioInterval}s)`);
-    }
-    
-    // Generate first comment immediately
-    setTimeout(() => {
-      generateAndPostComment(session).catch(err => {
-        console.error(`[StreamMonitor] Error in first comment:`, err);
-        session.errors.push(err.message);
-      });
-    }, 5000); // Wait 5 seconds for page to fully load
-    
-    console.log(`[StreamMonitor] Session ${sessionId} started successfully`);
-    return sessionId;
-    
-  } catch (error) {
-    session.status = 'error';
-    session.errors.push(error instanceof Error ? error.message : 'Unknown error');
-    console.error(`[StreamMonitor] Failed to start session:`, error);
-    throw error;
+  page.on("request", req => maybeCaptureMediaUrl(req.url()));
+  page.on("requestfinished", req => maybeCaptureMediaUrl(req.url()));
+  page.on("response", res => maybeCaptureMediaUrl(res.url()));
+
+  // Navigate to stream (domcontentloaded first to avoid long networkidle hangs on live pages)
+  console.log(`[StreamMonitor] Navigating to ${config.streamUrl}`);
+  setStartupProgress(session, "navigating", "Opening stream…");
+  try {
+    await page.goto(config.streamUrl, { waitUntil: "domcontentloaded", timeout: 25_000 });
+  } catch (navError) {
+    console.warn(`[StreamMonitor] domcontentloaded timeout, trying networkidle`);
+    setStartupProgress(session, "navigating_networkidle", "Waiting for stream to load…");
+    await page.goto(config.streamUrl, { waitUntil: "networkidle", timeout: 25_000 });
   }
+
+  // If user stopped while we were navigating, exit.
+  if (!activeSessions.has(session.id) || session.status === "stopped") {
+    setStartupProgress(session, "stopped", "Stopped during startup");
+    await browser.close().catch(() => {});
+    return;
+  }
+
+  // Check if page loaded successfully
+  setStartupProgress(session, "checking_page", "Verifying page…");
+  const pageTitle = await page.title().catch(() => "");
+  if (pageTitle.includes("404") || pageTitle.includes("Not Found")) {
+    throw new Error("Stream not found or has ended. Please add a new live stream URL.");
+  }
+
+  session.page = page;
+  session.status = "running";
+  setStartupProgress(session, "running", "Running");
+
+  // Best-effort: warm up media URL early (don't block init)
+  setStartupProgress(session, "warming_up", "Warming up audio/video…");
+  warmUpMediaUrl(session).catch(err => {
+    console.warn("[StreamMonitor] Media URL warmup failed:", err);
+  });
+
+  // Start the comment generation loop
+  const intervalMs = config.commentInterval * 1000;
+  session.intervalId = setInterval(() => {
+    generateAndPostComment(session).catch(err => {
+      console.error(`[StreamMonitor] Error in comment loop:`, err);
+      session.errors.push(err.message);
+    });
+  }, intervalMs);
+
+  // Start audio capture loop if enabled
+  if (config.audioEnabled) {
+    const audioIntervalMs = config.audioInterval * 1000;
+    session.audioIntervalId = setInterval(() => {
+      captureAndTranscribeAudio(session).catch(err => {
+        console.error(`[StreamMonitor] Error in audio capture:`, err);
+      });
+    }, audioIntervalMs);
+    console.log(`[StreamMonitor] Audio capture started (every ${config.audioInterval}s)`);
+  }
+
+  // Generate first comment sooner (best effort)
+  setTimeout(() => {
+    generateAndPostComment(session).catch(err => {
+      console.error(`[StreamMonitor] Error in first comment:`, err);
+      session.errors.push(err.message);
+    });
+  }, 1000);
+
+  console.log(`[StreamMonitor] Session ${session.id} started successfully`);
+  setStartupProgress(session, "ready", "Ready");
 }
 
 /**

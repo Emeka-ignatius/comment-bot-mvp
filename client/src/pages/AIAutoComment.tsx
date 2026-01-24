@@ -20,6 +20,10 @@ interface MonitorSession {
   lastComment?: string;
   lastCommentTime?: Date;
   errors: string[];
+  startupStage?: string;
+  startupMessage?: string;
+  startupStartedAtMs?: number;
+  startupUpdatedAtMs?: number;
 }
 
 export default function AIAutoComment() {
@@ -47,11 +51,20 @@ export default function AIAutoComment() {
   // Mutations
   const startMonitor = trpc.aiComment.startMonitor.useMutation({
     onSuccess: () => {
-      toast.success('AI monitoring started!');
+      toast.success('AI monitoring starting…');
       refetchSessions();
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const formatElapsed = (startedAtMs?: number) => {
+    if (!startedAtMs) return null;
+    const s = Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}m ${r}s`;
+  };
   
   const stopMonitor = trpc.aiComment.stopMonitor.useMutation({
     onSuccess: () => {
@@ -93,6 +106,11 @@ export default function AIAutoComment() {
   const filteredAccounts = accounts?.filter(a => 
     selectedVideo ? a.platform === selectedVideo.platform : true
   ) || [];
+
+  const selectableAccountIds = filteredAccounts.filter(a => a.isActive).map(a => a.id);
+  const allSelectableSelected =
+    selectableAccountIds.length > 0 &&
+    selectableAccountIds.every(id => selectedAccountIds.includes(id));
   
   // Handle account selection toggle
   const toggleAccount = (accountId: number) => {
@@ -101,6 +119,14 @@ export default function AIAutoComment() {
         ? prev.filter(id => id !== accountId)
         : [...prev, accountId]
     );
+  };
+
+  const selectAllActiveAccounts = () => {
+    setSelectedAccountIds(selectableAccountIds);
+  };
+
+  const clearSelectedAccounts = () => {
+    setSelectedAccountIds([]);
   };
   
   // Handle preview
@@ -189,6 +215,16 @@ export default function AIAutoComment() {
                       {session.commentsPosted} comments posted
                     </span>
                   </div>
+                  {session.status === 'starting' && (
+                    <p className="text-sm text-muted-foreground">
+                      {session.startupMessage ?? 'Starting…'}
+                      {formatElapsed(session.startupStartedAtMs) ? (
+                        <span className="ml-2 text-xs">
+                          ({formatElapsed(session.startupStartedAtMs)})
+                        </span>
+                      ) : null}
+                    </p>
+                  )}
                   {session.lastComment && (
                     <p className="text-sm text-muted-foreground italic">
                       Last: "{session.lastComment.slice(0, 50)}..."
@@ -441,6 +477,20 @@ export default function AIAutoComment() {
                 </p>
               ) : (
                 <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 pb-2">
+                    <div className="text-xs text-muted-foreground">
+                      Selected {selectedAccountIds.length} / {selectableAccountIds.length} active
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={allSelectableSelected ? clearSelectedAccounts : selectAllActiveAccounts}
+                      >
+                        {allSelectableSelected ? "Clear" : "Select all active"}
+                      </Button>
+                    </div>
+                  </div>
                   {filteredAccounts.map((account) => (
                     <div
                       key={account.id}

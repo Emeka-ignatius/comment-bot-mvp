@@ -96,6 +96,7 @@ type ConnectTokenRecord = {
   userId: number;
   platform: "rumble" | "youtube";
   accountName?: string;
+  targetAccountId?: number;
   createdAtMs: number;
   expiresAtMs: number;
   usedAtMs?: number;
@@ -221,6 +222,40 @@ export const appRouter = router({
           accountName: input.accountName ?? null,
         } as const;
       }),
+    refreshInit: protectedProcedure
+      .input(
+        z.object({
+          accountId: z.number(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "admin") throw new Error("Admin access required");
+
+        const accounts = await getAccountsByUserId(ctx.user.id);
+        const account = accounts.find(a => a.id === input.accountId);
+        if (!account) throw new Error("Account not found");
+
+        const token = createConnectToken();
+        const now = Date.now();
+        const expiresAtMs = now + CONNECT_TOKEN_TTL_MS;
+
+        connectTokens.set(token, {
+          userId: ctx.user.id,
+          platform: account.platform,
+          accountName: account.accountName,
+          targetAccountId: account.id,
+          createdAtMs: now,
+          expiresAtMs,
+        });
+
+        return {
+          connectToken: token,
+          expiresAt: new Date(expiresAtMs),
+          platform: account.platform,
+          accountId: account.id,
+          accountName: account.accountName,
+        } as const;
+      }),
     connectComplete: publicProcedure
       .input(
         z.object({
@@ -268,14 +303,31 @@ export const appRouter = router({
         const expirationDate = new Date();
         expirationDate.setDate(expirationDate.getDate() + 30);
 
-        await createAccount({
-          userId: record.userId,
-          platform: record.platform,
-          accountName,
-          cookies: cookieString,
-          proxy: input.proxy,
-          cookieExpiresAt: expirationDate,
-        });
+        // If this token targets an existing account, update cookies instead of creating a new row.
+        if (record.targetAccountId) {
+          const accounts = await getAccountsByUserId(record.userId);
+          const target = accounts.find(a => a.id === record.targetAccountId);
+          if (!target) throw new Error("Target account no longer exists");
+          if (target.platform !== record.platform) {
+            throw new Error("Target account platform mismatch");
+          }
+
+          await updateAccount(record.targetAccountId, {
+            cookies: cookieString,
+            proxy: input.proxy ?? target.proxy ?? undefined,
+            cookieExpiresAt: expirationDate,
+            isActive: true,
+          });
+        } else {
+          await createAccount({
+            userId: record.userId,
+            platform: record.platform,
+            accountName,
+            cookies: cookieString,
+            proxy: input.proxy,
+            cookieExpiresAt: expirationDate,
+          });
+        }
 
         // Optionally cleanup token after success
         connectTokens.delete(input.connectToken);

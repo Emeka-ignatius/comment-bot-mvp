@@ -37,6 +37,7 @@ export default function LoginAccount() {
   const updateMutation = trpc.accounts.update.useMutation();
   const deleteMutation = trpc.accounts.delete.useMutation();
   const connectInitMutation = trpc.accounts.connectInit.useMutation();
+  const refreshInitMutation = trpc.accounts.refreshInit.useMutation();
 
   const [showCookieHelper, setShowCookieHelper] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<
@@ -48,6 +49,13 @@ export default function LoginAccount() {
   const [connectAccountName, setConnectAccountName] = useState("Rumble Account");
   const [connectToken, setConnectToken] = useState<string | null>(null);
   const [connectExpiresAt, setConnectExpiresAt] = useState<string | null>(null);
+  const [refreshTokenForAccountId, setRefreshTokenForAccountId] = useState<number | null>(null);
+
+  // Auto-refresh (extension-based) state
+  const [showAutoRefresh, setShowAutoRefresh] = useState(false);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  const [refreshExpiresAt, setRefreshExpiresAt] = useState<string | null>(null);
+  const [refreshAccountName, setRefreshAccountName] = useState<string | null>(null);
 
   // Edit modal state
   const [editAccount, setEditAccount] = useState<EditAccountData | null>(null);
@@ -147,6 +155,30 @@ export default function LoginAccount() {
       toast.success("Token copied");
     } catch {
       toast.error("Failed to copy token");
+    }
+  };
+
+  const copyRefreshToken = async () => {
+    if (!refreshToken) return;
+    try {
+      await navigator.clipboard.writeText(refreshToken);
+      toast.success("Token copied");
+    } catch {
+      toast.error("Failed to copy token");
+    }
+  };
+
+  const startAutoRefresh = async (accountId: number) => {
+    try {
+      const result = await refreshInitMutation.mutateAsync({ accountId });
+      setRefreshTokenForAccountId(accountId);
+      setRefreshToken(result.connectToken);
+      setRefreshExpiresAt(new Date(result.expiresAt).toLocaleString());
+      setRefreshAccountName(result.accountName ?? null);
+      setShowAutoRefresh(true);
+      toast.success("Refresh token generated");
+    } catch (error) {
+      toast.error("Failed to generate refresh token");
     }
   };
 
@@ -272,6 +304,57 @@ export default function LoginAccount() {
                   </div>
                 </div>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showAutoRefresh} onOpenChange={open => !open && setShowAutoRefresh(false)}>
+          <DialogContent className="w-[95vw] sm:w-full sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Refresh Account Cookies (Auto)</DialogTitle>
+              <DialogDescription>
+                This generates a short-lived token. Use the browser extension to recapture rumble.com cookies from your browser session
+                and update the account in this app (no manual cookie copying).
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                Account: <span className="font-medium text-foreground">{refreshAccountName ?? "Selected account"}</span>
+              </div>
+
+              {refreshToken && (
+                <div className="space-y-2 p-3 bg-muted rounded-lg">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium">Refresh Token</div>
+                    <Button size="sm" variant="outline" onClick={copyRefreshToken}>
+                      Copy
+                    </Button>
+                  </div>
+                  <div className="font-mono text-xs break-all p-2 bg-background rounded border">
+                    {refreshToken}
+                  </div>
+                  {refreshExpiresAt && (
+                    <div className="text-xs text-muted-foreground">
+                      Expires at: {refreshExpiresAt}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
+                    Steps:
+                    <ol className="list-decimal ml-5 mt-1 space-y-1">
+                      <li>Make sure you are logged into Rumble in your browser (same profile/cookie store).</li>
+                      <li>Open the extension popup, paste this token, and click “Capture & Send”.</li>
+                      <li>Refresh this page; the account cookies will be updated.</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowAutoRefresh(false)}>
+                  Close
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -517,6 +600,20 @@ export default function LoginAccount() {
                         >
                           <RefreshCw size={14} />
                           Refresh
+                        </Button>
+                      )}
+
+                      {account.platform === "rumble" && (
+                        <Button
+                          onClick={() => startAutoRefresh(account.id)}
+                          disabled={refreshInitMutation.isPending && refreshTokenForAccountId === account.id}
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1"
+                          title="Refresh cookies via the browser extension"
+                        >
+                          <RefreshCw size={14} />
+                          Refresh (Auto)
                         </Button>
                       )}
                       <button
