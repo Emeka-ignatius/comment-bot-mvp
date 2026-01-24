@@ -1,9 +1,0 @@
-{
-  "query": "INSERT INTO jobs (userId, videoId, accountId, commentTemplateId, status, scheduledAt, createdAt, updatedAt) \nSELECT 1, v.id, a.id, c.id, 'pending', NOW(), NOW(), NOW()\nFROM videos v, accounts a, commentTemplates c\nWHERE v.videoUrl LIKE '%v73mkg8%' AND a.platform = 'rumble' AND c.isActive = 1\nLIMIT 1",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qmF7zQddKSdTNds.root --database gPPU9FGxZYYEJyDCRUmy73 --execute INSERT INTO jobs (userId, videoId, accountId, commentTemplateId, status, scheduledAt, createdAt, updatedAt) \nSELECT 1, v.id, a.id, c.id, 'pending', NOW(), NOW(), NOW()\nFROM videos v, accounts a, commentTemplates c\nWHERE v.videoUrl LIKE '%v73mkg8%' AND a.platform = 'rumble' AND c.isActive = 1\nLIMIT 1",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 63
-}
