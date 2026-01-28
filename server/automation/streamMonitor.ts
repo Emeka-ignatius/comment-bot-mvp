@@ -5,12 +5,12 @@
  * Uses Puppeteer to capture screenshots for visual context
  */
 
-import { chromium, Browser, Page } from 'playwright';
-import { generateAIComment, CommentStyle } from './aiCommentGenerator';
+import { Browser, chromium, Page } from 'playwright';
+import { createLog, getAccountsByUserId } from '../db';
+import { CommentStyle, generateAIComment } from './aiCommentGenerator';
+import { capturePageContextAudio, captureStreamAudio } from './audioCapture';
+import { detectCallToAction, summarizeTranscript, transcribeStreamAudio } from './audioTranscriber';
 import { postRumbleCommentDirect } from './directRumbleAPI';
-import { createJob, getAccountsByUserId, getVideosByUserId, createLog } from '../db';
-import { captureStreamAudio, capturePageContextAudio } from './audioCapture';
-import { transcribeStreamAudio, detectCallToAction, summarizeTranscript } from './audioTranscriber';
 import { getIProyalProxyUrlForAccount } from "./iproyal";
 
 export interface StreamMonitorConfig {
@@ -71,6 +71,22 @@ function setStartupProgress(session: MonitorSession, stage: string, message: str
   session.startupStage = stage;
   session.startupMessage = message;
   session.startupUpdatedAtMs = now;
+}
+
+function clampInt(n: number, min: number, max: number): number {
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+function getAudioCaptureSeconds(): number {
+  // Reduce bandwidth costs by default; keep an env override for higher fidelity.
+  // Set AUDIO_CAPTURE_SECONDS=12 if you want longer clips.
+  const raw =
+    process.env.AUDIO_CAPTURE_SECONDS ??
+    process.env.AUDIO_CAPTURE_MAX_SECONDS ??
+    "8";
+  const parsed = Number(raw);
+  return clampInt(parsed, 2, 12);
 }
 
 function pickBestMediaUrl(urls: string[]): string | undefined {
@@ -798,7 +814,7 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
       // Try to capture audio using ffmpeg approach
       // Construct config in a way that avoids excess-property TS diagnostics in some environments.
       // Capture a shorter clip than the interval to reduce memory/CPU (especially on Render).
-      const captureDuration = Math.min(config.audioInterval, 12);
+      const captureDuration = Math.min(config.audioInterval, getAudioCaptureSeconds());
       const captureCfg: any = {
         page: session.page,
         duration: captureDuration,
@@ -824,7 +840,7 @@ async function captureAndTranscribeAudio(session: MonitorSession): Promise<void>
       try {
         const audioResult = await capturePageContextAudio({
           page: session.page,
-          duration: Math.min(config.audioInterval, 15), // Shorter capture for page context
+          duration: Math.min(config.audioInterval, getAudioCaptureSeconds()),
           streamUrl: config.streamUrl,
         });
         audio = {

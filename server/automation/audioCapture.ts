@@ -394,12 +394,23 @@ async function ensureYtDlpBinary(): Promise<string> {
   return binPath;
 }
 
+function shouldProxyForUrl(targetUrl: string): boolean {
+  try {
+    const host = new URL(targetUrl).hostname.toLowerCase();
+    return host === "rumble.com" || host.endsWith(".rumble.com");
+  } catch {
+    const s = (targetUrl || "").toLowerCase();
+    return s.includes("rumble.com");
+  }
+}
+
 function buildYtDlpArgs(streamUrl: string, opts: { proxyUrl?: string; cookieString?: string; userAgent?: string }) {
   const args: string[] = ['-g', '-f', 'bestaudio/best', '--no-playlist', '--no-warnings'];
   if (opts.userAgent) {
     args.push('--user-agent', opts.userAgent);
   }
-  if (opts.proxyUrl) {
+  // IMPORTANT: do NOT proxy media/CDN downloads. Only proxy rumble.com itself.
+  if (opts.proxyUrl && shouldProxyForUrl(streamUrl)) {
     args.push('--proxy', opts.proxyUrl);
   }
   // Some sites (including Rumble) are picky about headers.
@@ -472,7 +483,7 @@ function extractM3u8FromText(text: string): string | null {
 async function verifyM3u8Url(url: string, opts: { cookieString?: string; proxyUrl?: string }): Promise<boolean> {
   try {
     let httpsAgent: any;
-    if (opts.proxyUrl) {
+    if (opts.proxyUrl && shouldProxyForUrl(url)) {
       try {
         const { HttpsProxyAgent } = await import("https-proxy-agent");
         httpsAgent = new HttpsProxyAgent(opts.proxyUrl);
@@ -506,7 +517,7 @@ async function verifyM3u8Url(url: string, opts: { cookieString?: string; proxyUr
 
 async function fetchText(url: string, opts: { cookieString?: string; proxyUrl?: string; referer?: string; userAgent?: string }): Promise<{ status: number; text: string }> {
   let httpsAgent: any;
-  if (opts.proxyUrl) {
+  if (opts.proxyUrl && shouldProxyForUrl(url)) {
     try {
       const { HttpsProxyAgent } = await import("https-proxy-agent");
       httpsAgent = new HttpsProxyAgent(opts.proxyUrl);
@@ -610,7 +621,7 @@ async function tryResolveRumbleM3u8ViaEmbedEndpoints(opts: {
     if (cookieString) headers["Cookie"] = cookieString;
 
     let httpsAgent: any;
-    if (proxyUrl) {
+    if (proxyUrl && shouldProxyForUrl(embedVideoUrl)) {
       try {
         const { HttpsProxyAgent } = await import("https-proxy-agent");
         httpsAgent = new HttpsProxyAgent(proxyUrl);
@@ -711,7 +722,9 @@ async function runFfmpegCapture(opts: {
       ffmpegArgs.push("-headers", `${headers.join("\r\n")}\r\n`);
     }
     // Best-effort: proxy for HTTP fetches (works on many ffmpeg builds).
-    if (opts.proxyUrl) {
+    // IMPORTANT: Never proxy CDN media downloads (this is what burns proxy traffic).
+    // Only proxy rumble.com itself if needed for manifest/metadata fetches.
+    if (opts.proxyUrl && shouldProxyForUrl(inputUrl)) {
       ffmpegArgs.push("-http_proxy", opts.proxyUrl);
     }
 

@@ -35,7 +35,7 @@ export default function AIAutoComment() {
   const [includeEmojis, setIncludeEmojis] = useState(true);
   const [maxCommentLength, setMaxCommentLength] = useState(150);
   const [audioEnabled, setAudioEnabled] = useState(true); // Enable audio transcription by default
-  const [audioInterval, setAudioInterval] = useState(30); // Capture audio every 30 seconds
+  const [audioInterval, setAudioInterval] = useState(90); // Capture audio every 90 seconds (lower proxy/CDN bandwidth)
   
   // Preview state
   const [previewComment, setPreviewComment] = useState<string | null>(null);
